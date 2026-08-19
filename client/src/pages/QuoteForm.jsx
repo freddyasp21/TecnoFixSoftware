@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, usd, bs, rateLabel } from '../api';
 import LineItems from '../components/LineItems';
-import { ErrorBox, Field, PageHeader, Switch } from '../components/ui';
+import { ErrorBox, Field, Modal, PageHeader, Switch } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function QuoteForm() {
@@ -13,6 +13,9 @@ export default function QuoteForm() {
   const [settings, setSettings] = useState(null);
   const [rates, setRates] = useState(null);
   const [error, setError] = useState('');
+  const [clientOpen, setClientOpen] = useState(false);
+  const [clientForm, setClientForm] = useState({ name: '', document: '', phone: '', email: '', address: '', notes: '' });
+  const [clientMsg, setClientMsg] = useState('');
   const [form, setForm] = useState({
     client_id: '', status: 'borrador', rate_type: 'bcv', rate_value: 1,
     iva_enabled: false, iva_rate: 16, notes: '', items: [],
@@ -78,10 +81,24 @@ export default function QuoteForm() {
     } catch (err) { setError(err.message); }
   }
 
+  async function createClient(e) {
+    e.preventDefault();
+    setClientMsg('');
+    try {
+      const created = await api('/clients', { method: 'POST', body: clientForm });
+      const list = await api('/clients');
+      setClients(list);
+      setForm((f) => ({ ...f, client_id: String(created.id) }));
+      setClientOpen(false);
+      setClientForm({ name: '', document: '', phone: '', email: '', address: '', notes: '' });
+    } catch (err) { setClientMsg(err.message); }
+  }
+
   const locked = form.status === 'convertida';
   const pendingPay = form.status === 'aprobada';
 
   return (
+    <>
     <form onSubmit={save}>
       <PageHeader
         title={id ? `Cotización` : 'Nueva cotización'}
@@ -107,12 +124,23 @@ export default function QuoteForm() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card space-y-3 p-5 lg:col-span-2">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Cliente">
-              <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} disabled={locked || pendingPay}>
-                <option value="">— Sin cliente —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </Field>
+            <div>
+              <Field label="Cliente">
+                <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} disabled={locked || pendingPay}>
+                  <option value="">— Sin cliente —</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.document ? ` · ${c.document}` : ''}</option>)}
+                </select>
+              </Field>
+              {can('clients.manage') && !locked && !pendingPay && (
+                <button
+                  type="button"
+                  className="btn-ghost mt-2 w-full"
+                  onClick={() => { setClientMsg(''); setClientForm({ name: '', document: '', phone: '', email: '', address: '', notes: '' }); setClientOpen(true); }}
+                >
+                  + Nuevo cliente
+                </button>
+              )}
+            </div>
             <Field label="Estado">
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} disabled={locked}>
                 <option value="borrador">Borrador</option>
@@ -151,5 +179,21 @@ export default function QuoteForm() {
         </div>
       </div>
     </form>
+
+      {clientOpen && (
+        <Modal title="Registrar nuevo cliente" onClose={() => setClientOpen(false)}>
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={createClient}>
+            <p className="sm:col-span-2 text-sm text-slate-600">Quedará en el módulo Clientes y se asignará a esta cotización.</p>
+            <div className="sm:col-span-2"><Field label="Nombre"><input value={clientForm.name} onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })} required /></Field></div>
+            <Field label="Cédula / RIF"><input value={clientForm.document} onChange={(e) => setClientForm({ ...clientForm, document: e.target.value })} /></Field>
+            <Field label="Teléfono"><input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} /></Field>
+            <Field label="Correo"><input type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></Field>
+            <Field label="Dirección"><input value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} /></Field>
+            <div className="sm:col-span-2"><Field label="Notas"><textarea rows={2} value={clientForm.notes} onChange={(e) => setClientForm({ ...clientForm, notes: e.target.value })} /></Field></div>
+            <div className="sm:col-span-2"><ErrorBox error={clientMsg} /><button className="btn-primary w-full">Guardar cliente</button></div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }

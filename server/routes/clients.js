@@ -39,7 +39,8 @@ router.post('/', requirePermission('clients.manage'), (req, res) => {
     INSERT INTO clients (name, document, phone, email, address, notes)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(b.name.trim(), b.document || '', b.phone || '', b.email || '', b.address || '', b.notes || '');
-  res.status(201).json({ id: info.lastInsertRowid });
+  const created = getDb().prepare('SELECT * FROM clients WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(created);
 });
 
 router.put('/:id', requirePermission('clients.manage'), (req, res) => {
