@@ -46,11 +46,13 @@ router.get('/current', requirePermission('cash.view'), (_req, res) => {
   const session = currentSession(db);
   if (!session) return res.json({ session: null, breakdown: null, movements: [], pendingQuotes });
   const movements = db.prepare(`
-    SELECT t.*, c.name AS client_name, wo.number AS order_number, u.full_name AS created_by_name
+    SELECT t.*, c.name AS client_name, wo.number AS order_number, u.full_name AS created_by_name,
+           w.full_name AS worker_name
     FROM cash_transactions t
     LEFT JOIN clients c ON c.id = t.client_id
     LEFT JOIN work_orders wo ON wo.id = t.work_order_id
     LEFT JOIN users u ON u.id = t.created_by
+    LEFT JOIN workers w ON w.id = t.worker_id
     WHERE t.session_id = ?
     ORDER BY t.created_at DESC
   `).all(session.id);

@@ -122,6 +122,7 @@ export default function Cash() {
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('caja')}>Exportar Excel</button>
             <Link className="btn-ghost" to="/finanzas">Finanzas</Link>
+            <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>
             {can('cash.manage') && !session && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
             {can('cash.manage') && session && (
               <>
@@ -251,7 +252,7 @@ export default function Cash() {
                         ? <span className="text-xs text-slate-400">Ingreso</span>
                         : (FINANCE_BUCKETS.find((b) => b.id === t.finance_bucket)?.label || 'Sin clasificar')}
                     </td>
-                    <td>{t.description} {t.order_number || ''} {t.client_name || ''}</td>
+                    <td>{t.description} {t.order_number || ''} {t.client_name || ''} {t.worker_name || ''}</td>
                   </tr>
                 ))}
               </tbody>

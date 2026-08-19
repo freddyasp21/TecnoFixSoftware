@@ -85,13 +85,25 @@ router.get('/', requireAny('finance.view', 'cash.view'), (req, res) => {
 
   const movements = db.prepare(`
     SELECT t.id, t.type, t.payment_method, t.amount, t.amount_usd, t.description,
-           t.finance_bucket, t.created_at, c.name AS client_name, wo.number AS order_number
+           t.finance_bucket, t.created_at, t.worker_id,
+           c.name AS client_name, wo.number AS order_number, w.full_name AS worker_name
     FROM cash_transactions t
     LEFT JOIN clients c ON c.id = t.client_id
     LEFT JOIN work_orders wo ON wo.id = t.work_order_id
+    LEFT JOIN workers w ON w.id = t.worker_id
     WHERE date(t.created_at) BETWEEN date(?) AND date(?)
     ORDER BY t.created_at DESC
   `).all(from, to);
+
+  const payroll = db.prepare(`
+    SELECT p.id, p.period_from, p.period_to, p.period_kind, p.days_worked,
+           p.allocated_usd, p.amount_usd, p.created_at, w.full_name AS worker_name
+    FROM payroll_payments p
+    JOIN workers w ON w.id = p.worker_id
+    WHERE date(p.created_at) BETWEEN date(?) AND date(?)
+       OR (p.period_from <= ? AND p.period_to >= ?)
+    ORDER BY p.created_at DESC
+  `).all(from, to, to, from);
 
   res.json({
     from,
@@ -103,6 +115,7 @@ router.get('/', requireAny('finance.view', 'cash.view'), (req, res) => {
     rules: pct,
     envelopes,
     movements,
+    payroll,
   });
 });
 

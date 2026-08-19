@@ -78,6 +78,7 @@ export default function Finance() {
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('finanzas')}>Exportar Excel</button>
             {can('cash.view') && <Link className="btn-ghost" to="/caja">Ir a caja</Link>}
+            {(can('workers.view') || can('cash.view')) && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
           </>
         }
       />
@@ -173,6 +174,31 @@ export default function Finance() {
         </form>
       )}
 
+      {(data?.payroll || []).length > 0 && (
+        <div className="card mb-6 table-wrap">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="font-semibold text-ink-900">Nómina registrada</h2>
+            <p className="text-xs text-slate-500">Pagos a trabajadores hechos desde caja, descontados del sobre del 40%.</p>
+          </div>
+          <table className="data">
+            <thead>
+              <tr><th>Fecha</th><th>Trabajador</th><th>Quincena</th><th>Días</th><th>Pagado USD</th></tr>
+            </thead>
+            <tbody>
+              {data.payroll.map((p) => (
+                <tr key={p.id}>
+                  <td className="whitespace-nowrap">{p.created_at}</td>
+                  <td className="font-medium">{p.worker_name}</td>
+                  <td>{p.period_from} → {p.period_to}</td>
+                  <td>{p.days_worked}</td>
+                  <td className="text-rose-700">{usd(p.amount_usd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card table-wrap">
         <div className="border-b border-slate-100 px-4 py-3">
           <h2 className="font-semibold text-ink-900">Movimientos de caja del período</h2>
@@ -196,7 +222,7 @@ export default function Finance() {
                 <td>{t.type === 'income' ? 'Ingreso' : 'Egreso'}</td>
                 <td>{PAYMENT_METHODS.find((m) => m.id === t.payment_method)?.label}</td>
                 <td className={t.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}>{usd(t.amount_usd)}</td>
-                <td>{[t.description, t.order_number, t.client_name].filter(Boolean).join(' · ') || '—'}</td>
+                <td>{[t.description, t.order_number, t.client_name, t.worker_name].filter(Boolean).join(' · ') || '—'}</td>
                 <td>
                   {t.type === 'income' ? (
                     <span className="text-xs text-slate-500">Se reparte en sobres</span>

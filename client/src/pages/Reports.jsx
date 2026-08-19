@@ -16,7 +16,7 @@ export default function Reports() {
         subtitle="Analítica por rango de fechas y exportación a Excel"
         actions={
           <div className="flex flex-wrap gap-2">
-            {['ordenes', 'cotizaciones', 'caja', 'finanzas', 'inventario', 'clientes', 'catalogo'].map((m) => (
+            {['ordenes', 'cotizaciones', 'caja', 'finanzas', 'nomina', 'trabajadores', 'inventario', 'clientes', 'catalogo'].map((m) => (
               <button key={m} className="btn-ghost capitalize" onClick={() => downloadExcel(m)}>{m}</button>
             ))}
           </div>

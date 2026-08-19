@@ -8,43 +8,97 @@ function columnExists(db, table, column) {
   return cols.some((c) => c.name === column);
 }
 
+function addPermission(db, code, module, description) {
+  db.prepare(`
+    INSERT INTO permissions (code, module, description)
+    SELECT ?, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = ?)
+  `).run(code, module, description, code);
+}
+
+function linkAllRoles(db, code) {
+  db.prepare(`
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE p.code = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM role_permissions rp
+        WHERE rp.role_id = r.id AND rp.permission_id = p.id
+      )
+  `).run(code);
+}
+
+function linkRoles(db, code, names) {
+  db.prepare(`
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE p.code = ?
+      AND r.name IN (${names.map(() => '?').join(',')})
+      AND NOT EXISTS (
+        SELECT 1 FROM role_permissions rp
+        WHERE rp.role_id = r.id AND rp.permission_id = p.id
+      )
+  `).run(code, ...names);
+}
+
 function migrate(db) {
   if (!columnExists(db, 'cash_transactions', 'finance_bucket')) {
     db.exec('ALTER TABLE cash_transactions ADD COLUMN finance_bucket TEXT');
   }
+  if (!columnExists(db, 'cash_transactions', 'worker_id')) {
+    db.exec('ALTER TABLE cash_transactions ADD COLUMN worker_id INTEGER');
+  }
 
-  const insertPerm = db.prepare(`
-    INSERT INTO permissions (code, module, description)
-    SELECT ?, ?, ?
-    WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = ?)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS workers (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id       INTEGER REFERENCES users(id),
+      full_name     TEXT NOT NULL,
+      document      TEXT,
+      phone         TEXT,
+      position      TEXT,
+      share_weight  REAL NOT NULL DEFAULT 1 CHECK (share_weight > 0),
+      active        INTEGER NOT NULL DEFAULT 1,
+      notes         TEXT,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+    CREATE TABLE IF NOT EXISTS worker_attendance (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      worker_id  INTEGER NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+      day        TEXT NOT NULL,
+      worked     INTEGER NOT NULL DEFAULT 1,
+      notes      TEXT,
+      UNIQUE(worker_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS payroll_payments (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      worker_id            INTEGER NOT NULL REFERENCES workers(id),
+      period_from          TEXT NOT NULL,
+      period_to            TEXT NOT NULL,
+      period_kind          TEXT NOT NULL CHECK (period_kind IN ('q1','q2')),
+      days_worked          INTEGER NOT NULL DEFAULT 0,
+      allocated_usd        REAL NOT NULL DEFAULT 0,
+      amount_usd           REAL NOT NULL CHECK (amount_usd > 0),
+      cash_transaction_id  INTEGER REFERENCES cash_transactions(id),
+      created_by           INTEGER REFERENCES users(id),
+      created_at           TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_attendance_day ON worker_attendance(day);
+    CREATE INDEX IF NOT EXISTS idx_payroll_period ON payroll_payments(period_from, period_to);
   `);
-  insertPerm.run('finance.view', 'finanzas', 'Consultar gestión financiera', 'finance.view');
-  insertPerm.run('finance.manage', 'finanzas', 'Ajustar reglas y clasificar egresos', 'finance.manage');
 
-  const link = db.prepare(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r, permissions p
-    WHERE p.code = ?
-      AND NOT EXISTS (
-        SELECT 1 FROM role_permissions rp
-        WHERE rp.role_id = r.id AND rp.permission_id = p.id
-      )
-  `);
-  link.run('finance.view');
+  addPermission(db, 'finance.view', 'finanzas', 'Consultar gestión financiera');
+  addPermission(db, 'finance.manage', 'finanzas', 'Ajustar reglas y clasificar egresos');
+  addPermission(db, 'workers.view', 'trabajadores', 'Consultar trabajadores y nómina');
+  addPermission(db, 'workers.manage', 'trabajadores', 'Editar plantilla, asistencia y pagar nómina');
 
-  const linkManage = db.prepare(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r, permissions p
-    WHERE p.code = ?
-      AND r.name IN ('Administrador', 'Cajero')
-      AND NOT EXISTS (
-        SELECT 1 FROM role_permissions rp
-        WHERE rp.role_id = r.id AND rp.permission_id = p.id
-      )
-  `);
-  linkManage.run('finance.manage');
+  linkAllRoles(db, 'finance.view');
+  linkAllRoles(db, 'workers.view');
+  linkRoles(db, 'finance.manage', ['Administrador', 'Cajero']);
+  linkRoles(db, 'workers.manage', ['Administrador', 'Cajero']);
 
   const has = db.prepare('SELECT 1 FROM settings WHERE key = ?');
   if (!has.get('finance_pct_payroll')) setSetting(db, 'finance_pct_payroll', '40');

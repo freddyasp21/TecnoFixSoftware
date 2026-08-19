@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Wrench, CalendarDays, Boxes, Package,
-  Users, Wallet, Banknote, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
+  Users, HardHat, Wallet, Banknote, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
 } from 'lucide-react';
 import { useAuth } from '../auth';
 
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/catalogo', label: 'Catálogo', icon: Package, perm: 'catalog.view' },
   { to: '/inventario', label: 'Inventario', icon: Boxes, perm: 'inventory.view' },
   { to: '/clientes', label: 'Clientes', icon: Users, perm: 'clients.view' },
+  { to: '/trabajadores', label: 'Trabajadores', icon: HardHat, anyOf: ['workers.view', 'cash.view'] },
   { to: '/caja', label: 'Caja', icon: Wallet, perm: 'cash.view' },
   { to: '/finanzas', label: 'Finanzas', icon: Banknote, anyOf: ['finance.view', 'cash.view'] },
   { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, perm: 'rates.view' },

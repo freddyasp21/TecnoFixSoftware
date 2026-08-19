@@ -29,6 +29,9 @@ export default function Dashboard() {
   if (can('finance.view') || can('cash.view')) {
     cards.push({ label: 'Gestión financiera', value: '40 / 30 / 20', to: '/finanzas' });
   }
+  if (can('workers.view') || can('cash.view')) {
+    cards.push({ label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' });
+  }
 
   return (
     <div>

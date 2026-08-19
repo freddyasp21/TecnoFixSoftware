@@ -27,6 +27,8 @@ const PERMISSIONS = [
   ['cash.manage', 'caja', 'Abrir/cerrar caja y registrar movimientos'],
   ['finance.view', 'finanzas', 'Consultar gestión financiera'],
   ['finance.manage', 'finanzas', 'Ajustar reglas y clasificar egresos'],
+  ['workers.view', 'trabajadores', 'Consultar trabajadores y nómina'],
+  ['workers.manage', 'trabajadores', 'Editar plantilla, asistencia y pagar nómina'],
   ['reports.view', 'reportes', 'Ver reportes y exportar Excel'],
   ['settings.manage', 'configuracion', 'Ajustes, IVA y actualizaciones'],
 ];
@@ -37,14 +39,15 @@ const ROLE_PERMS = {
     'dashboard.view', 'rates.view', 'catalog.view', 'catalog.manage',
     'quotes.view', 'orders.view', 'orders.manage',
     'calendar.view', 'calendar.manage', 'inventory.view',
-    'clients.view', 'clients.manage',
+    'clients.view', 'clients.manage', 'workers.view',
   ],
   Cajero: [
     'dashboard.view', 'rates.view', 'rates.manage',
     'catalog.view', 'quotes.view', 'quotes.manage',
     'orders.view', 'orders.manage', 'calendar.view', 'inventory.view',
     'clients.view', 'clients.manage',
-    'cash.view', 'cash.manage', 'finance.view', 'finance.manage', 'reports.view',
+    'cash.view', 'cash.manage', 'finance.view', 'finance.manage',
+    'workers.view', 'workers.manage', 'reports.view',
   ],
 };
 

@@ -234,7 +234,8 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   description     TEXT,
   created_by      INTEGER REFERENCES users(id),
   created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  finance_bucket  TEXT CHECK (finance_bucket IS NULL OR finance_bucket IN ('payroll','supplies','savings','operation'))
+  finance_bucket  TEXT CHECK (finance_bucket IS NULL OR finance_bucket IN ('payroll','supplies','savings','operation')),
+  worker_id       INTEGER
 );
 
 -- Venta directa (mostrador) ligada a caja e inventario
@@ -270,3 +271,49 @@ CREATE TABLE IF NOT EXISTS work_days (
   worked  INTEGER NOT NULL DEFAULT 1,
   notes   TEXT
 );
+
+-- -----------------------------------------------------------------------------
+-- Trabajadores y nómina quincenal (1-15 / 16-último)
+-- El 40% de los ingresos de caja del período se reparte según días laborados.
+-- El pago se registra como egreso de caja en el sobre "payroll".
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS workers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER REFERENCES users(id),
+  full_name     TEXT NOT NULL,
+  document      TEXT,
+  phone         TEXT,
+  position      TEXT,
+  share_weight  REAL NOT NULL DEFAULT 1 CHECK (share_weight > 0),
+  active        INTEGER NOT NULL DEFAULT 1,
+  notes         TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS worker_attendance (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id  INTEGER NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+  day        TEXT NOT NULL,
+  worked     INTEGER NOT NULL DEFAULT 1,
+  notes      TEXT,
+  UNIQUE(worker_id, day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_day ON worker_attendance(day);
+
+CREATE TABLE IF NOT EXISTS payroll_payments (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id            INTEGER NOT NULL REFERENCES workers(id),
+  period_from          TEXT NOT NULL,
+  period_to            TEXT NOT NULL,
+  period_kind          TEXT NOT NULL CHECK (period_kind IN ('q1','q2')),
+  days_worked          INTEGER NOT NULL DEFAULT 0,
+  allocated_usd        REAL NOT NULL DEFAULT 0,
+  amount_usd           REAL NOT NULL CHECK (amount_usd > 0),
+  cash_transaction_id  INTEGER REFERENCES cash_transactions(id),
+  created_by           INTEGER REFERENCES users(id),
+  created_at           TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_period ON payroll_payments(period_from, period_to);

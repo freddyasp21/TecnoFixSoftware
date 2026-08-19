@@ -179,10 +179,12 @@ const MODULES = {
   finanzas: () => {
     const rows = getDb().prepare(`
       SELECT t.created_at, t.type, t.payment_method, t.amount, t.amount_usd,
-             t.finance_bucket, t.description, c.name AS client_name, wo.number AS order_number
+             t.finance_bucket, t.description, c.name AS client_name, wo.number AS order_number,
+             w.full_name AS worker_name
       FROM cash_transactions t
       LEFT JOIN clients c ON c.id = t.client_id
       LEFT JOIN work_orders wo ON wo.id = t.work_order_id
+      LEFT JOIN workers w ON w.id = t.worker_id
       ORDER BY t.created_at DESC
     `).all().map((r) => ({
       ...r,
@@ -203,7 +205,52 @@ const MODULES = {
         { header: 'Sobre', key: 'bucket_label', width: 28 },
         { header: 'Cliente', key: 'client_name', width: 24 },
         { header: 'Orden', key: 'order_number', width: 12 },
+        { header: 'Trabajador', key: 'worker_name', width: 22 },
         { header: 'Descripción', key: 'description', width: 32 },
+      ],
+      rows,
+    };
+  },
+  trabajadores: () => {
+    const rows = getDb().prepare(`
+      SELECT full_name, document, phone, position, share_weight, active, created_at
+      FROM workers ORDER BY active DESC, full_name
+    `).all().map((r) => ({ ...r, active_label: r.active ? 'Activo' : 'Inactivo' }));
+    return {
+      sheet: 'Trabajadores',
+      columns: [
+        { header: 'Nombre', key: 'full_name', width: 24 },
+        { header: 'Cédula', key: 'document', width: 16 },
+        { header: 'Teléfono', key: 'phone', width: 16 },
+        { header: 'Cargo', key: 'position', width: 18 },
+        { header: 'Peso nómina', key: 'share_weight', width: 14 },
+        { header: 'Estado', key: 'active_label', width: 12 },
+        { header: 'Alta', key: 'created_at', width: 20 },
+      ],
+      rows,
+    };
+  },
+  nomina: () => {
+    const rows = getDb().prepare(`
+      SELECT p.*, w.full_name AS worker_name
+      FROM payroll_payments p
+      JOIN workers w ON w.id = p.worker_id
+      ORDER BY p.created_at DESC
+    `).all().map((r) => ({
+      ...r,
+      kind_label: r.period_kind === 'q1' ? '1 al 15' : '16 al último',
+    }));
+    return {
+      sheet: 'Nomina',
+      columns: [
+        { header: 'Fecha pago', key: 'created_at', width: 20 },
+        { header: 'Trabajador', key: 'worker_name', width: 24 },
+        { header: 'Quincena', key: 'kind_label', width: 14 },
+        { header: 'Desde', key: 'period_from', width: 12 },
+        { header: 'Hasta', key: 'period_to', width: 12 },
+        { header: 'Días', key: 'days_worked', width: 8 },
+        { header: 'Asignado USD', key: 'allocated_usd', width: 14 },
+        { header: 'Pagado USD', key: 'amount_usd', width: 14 },
       ],
       rows,
     };
