@@ -1,0 +1,16 @@
+node_modules/
+dist/
+release/
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.DS_Store
+Thumbs.db
+client/dist/
+client/node_modules/
+*.log
+.vite/
+out/
+build/win-unpacked/

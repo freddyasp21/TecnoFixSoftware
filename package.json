@@ -1,0 +1,87 @@
+{
+  "name": "tecno-fix",
+  "version": "1.0.0",
+  "description": "Tecno Fix - Software para talleres. Aplicación híbrida local (Express + SQLite + PWA/Electron).",
+  "author": "Tecno Fix",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "postinstall": "npm install --prefix client",
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "dev:electron": "concurrently -n server,client,electron -c cyan,magenta,yellow \"npm run dev:server\" \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
+    "build:client": "npm --prefix client run build",
+    "start": "node server/index.js",
+    "electron": "electron .",
+    "rebuild": "electron-builder install-app-deps",
+    "pack": "npm run build:client && electron-builder --dir",
+    "dist": "npm run build:client && electron-builder --win nsis",
+    "dist:publish": "npm run build:client && electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "electron-updater": "^6.3.9",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.tecnofix.taller",
+    "productName": "Tecno Fix",
+    "copyright": "Copyright © Tecno Fix",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "client/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data/.gitkeep",
+        "to": "data/.gitkeep"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "TecnoFix-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tecno Fix",
+      "uninstallDisplayName": "Tecno Fix - Software para talleres"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "freddyasp21",
+      "repo": "TecnoFixSoftware"
+    },
+    "extraMetadata": {
+      "main": "electron/main.js"
+    }
+  }
+}

@@ -1,0 +1,119 @@
+/**
+ * Semilla inicial: roles, permisos granulares, usuario admin y ajustes del taller.
+ * Se ejecuta una sola vez cuando la BD está vacía.
+ */
+const bcrypt = require('bcryptjs');
+
+const PERMISSIONS = [
+  ['dashboard.view', 'dashboard', 'Ver panel principal'],
+  ['users.manage', 'usuarios', 'Gestionar usuarios y roles'],
+  ['rates.view', 'tasas', 'Consultar tasas de cambio'],
+  ['rates.manage', 'tasas', 'Registrar y editar tasas de cambio'],
+  ['catalog.view', 'catalogo', 'Consultar catálogo'],
+  ['catalog.manage', 'catalogo', 'Crear y editar productos/servicios'],
+  ['quotes.view', 'cotizaciones', 'Consultar cotizaciones'],
+  ['quotes.manage', 'cotizaciones', 'Crear y editar cotizaciones'],
+  ['quotes.delete', 'cotizaciones', 'Eliminar cotizaciones'],
+  ['orders.view', 'ordenes', 'Consultar órdenes de trabajo'],
+  ['orders.manage', 'ordenes', 'Crear y editar órdenes'],
+  ['orders.delete', 'ordenes', 'Eliminar órdenes de trabajo'],
+  ['calendar.view', 'calendario', 'Ver calendario operativo'],
+  ['calendar.manage', 'calendario', 'Marcar días laborados'],
+  ['inventory.view', 'inventario', 'Consultar inventario'],
+  ['inventory.manage', 'inventario', 'Ajustar stock y kardex'],
+  ['clients.view', 'clientes', 'Consultar clientes'],
+  ['clients.manage', 'clientes', 'Crear y editar clientes'],
+  ['cash.view', 'caja', 'Consultar caja'],
+  ['cash.manage', 'caja', 'Abrir/cerrar caja y registrar movimientos'],
+  ['reports.view', 'reportes', 'Ver reportes y exportar Excel'],
+  ['settings.manage', 'configuracion', 'Ajustes, IVA y actualizaciones'],
+];
+
+/** Permisos por rol (el Administrador recibe todos automáticamente). */
+const ROLE_PERMS = {
+  Tecnico: [
+    'dashboard.view', 'rates.view', 'catalog.view', 'catalog.manage',
+    'quotes.view', 'orders.view', 'orders.manage',
+    'calendar.view', 'calendar.manage', 'inventory.view',
+    'clients.view', 'clients.manage',
+  ],
+  Cajero: [
+    'dashboard.view', 'rates.view', 'rates.manage',
+    'catalog.view', 'quotes.view', 'quotes.manage',
+    'orders.view', 'orders.manage', 'calendar.view', 'inventory.view',
+    'clients.view', 'clients.manage',
+    'cash.view', 'cash.manage', 'reports.view',
+  ],
+};
+
+function seed(db) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  if (count > 0) return;
+
+  const insertRole = db.prepare('INSERT INTO roles (name, description, is_system) VALUES (?, ?, 1)');
+  insertRole.run('Administrador', 'Acceso total al sistema');
+  insertRole.run('Tecnico', 'Gestión de órdenes, catálogo y calendario');
+  insertRole.run('Cajero', 'Caja, cotizaciones y clientes. Sin borrar órdenes ni editar inventario');
+
+  const insertPerm = db.prepare('INSERT INTO permissions (code, module, description) VALUES (?, ?, ?)');
+  for (const [code, module, description] of PERMISSIONS) {
+    insertPerm.run(code, module, description);
+  }
+
+  const roles = db.prepare('SELECT id, name FROM roles').all();
+  const perms = db.prepare('SELECT id, code FROM permissions').all();
+  const permByCode = Object.fromEntries(perms.map((p) => [p.code, p.id]));
+  const link = db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)');
+
+  const tx = db.transaction(() => {
+    for (const role of roles) {
+      const codes = role.name === 'Administrador'
+        ? PERMISSIONS.map((p) => p[0])
+        : (ROLE_PERMS[role.name] || []);
+      for (const code of codes) {
+        if (permByCode[code]) link.run(role.id, permByCode[code]);
+      }
+    }
+  });
+  tx();
+
+  const adminRoleId = roles.find((r) => r.name === 'Administrador').id;
+  const hash = bcrypt.hashSync('Admin123!', 10);
+  db.prepare(`
+    INSERT INTO users (username, password_hash, full_name, role_id, active)
+    VALUES (?, ?, ?, ?, 1)
+  `).run('admin', hash, 'Administrador', adminRoleId);
+
+  const set = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+  const defaults = {
+    shop_name: 'Tecno Fix',
+    shop_subtitle: 'Software para talleres',
+    shop_phone: '',
+    shop_address: '',
+    shop_rif: '',
+    iva_enabled: '0',
+    iva_rate: '16',
+    github_owner: 'freddyasp21',
+    github_repo: 'TecnoFixSoftware',
+    jwt_secret: require('crypto').randomBytes(32).toString('hex'),
+    quote_seq: '0',
+    order_seq: '0',
+    sale_seq: '0',
+    app_version: require('../../package.json').version,
+  };
+  for (const [k, v] of Object.entries(defaults)) set.run(k, v);
+
+  // Catálogo de ejemplo para poder cotizar desde el primer arranque
+  const cat = db.prepare(`
+    INSERT INTO catalog_items (type, code, name, description, price_usd, stock, min_stock, estimated_minutes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  cat.run('service', 'SRV-DIAG', 'Diagnóstico general', 'Revisión y presupuesto de falla', 8, 0, 0, 30);
+  cat.run('service', 'SRV-SOFT', 'Instalación de software / SO', 'Formateo e instalación de sistema', 25, 0, 0, 90);
+  cat.run('service', 'SRV-MANT', 'Mantenimiento preventivo', 'Limpieza interna y pasta térmica', 18, 0, 0, 60);
+  cat.run('product', 'REP-SSD256', 'Disco SSD 256GB', 'Unidad de estado sólido SATA', 28, 5, 2, 0);
+  cat.run('product', 'REP-RAM8', 'Memoria RAM 8GB DDR4', 'Módulo SODIMM/DIMM', 22, 4, 1, 0);
+  cat.run('product', 'ACC-MOUSE', 'Mouse USB', 'Periférico de reposición', 6, 10, 3, 0);
+}
+
+module.exports = { seed };

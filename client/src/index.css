@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+input, select, textarea {
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition;
+  @apply focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
+}
+
+label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-500 shadow-sm; }
+.btn-dark { @apply btn bg-ink-900 text-white hover:bg-ink-800; }
+.btn-ghost { @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50; }
+.btn-danger { @apply btn bg-rose-600 text-white hover:bg-rose-500; }
+.btn-amber { @apply btn bg-ember-500 text-ink-950 hover:bg-ember-400; }
+
+.card {
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-card;
+}
+
+.table-wrap { @apply overflow-x-auto; }
+table.data {
+  @apply w-full text-left text-sm;
+}
+table.data th {
+  @apply bg-slate-50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200;
+}
+table.data td {
+  @apply px-3 py-2.5 border-b border-slate-100 text-slate-700;
+}
+table.data tr:hover td { @apply bg-sky-50/40; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
