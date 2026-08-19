@@ -110,19 +110,24 @@ router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
   if (!['income', 'expense'].includes(b.type) || !(Number(b.amount) > 0)) {
     return res.status(400).json({ error: 'Tipo y monto válidos son obligatorios' });
   }
+  const FINANCE_BUCKETS = ['payroll', 'supplies', 'savings', 'operation'];
+  if (b.type === 'expense' && b.finance_bucket && !FINANCE_BUCKETS.includes(b.finance_bucket)) {
+    return res.status(400).json({ error: 'Clasificación financiera no válida' });
+  }
   const rate = todayRate(db);
   const rateType = b.rate_type || 'bcv';
   const rateValue = Number(b.rate_value) || (rate ? rate[rateType] : 1);
   const amountUsd = amountToUsd(b.amount, b.payment_method, rateType, rateValue);
+  const bucket = b.type === 'expense' ? (b.finance_bucket || null) : null;
   const info = db.prepare(`
     INSERT INTO cash_transactions (
       session_id, type, payment_method, amount, amount_usd, rate_type, rate_value,
-      client_id, work_order_id, quote_id, description, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      client_id, work_order_id, quote_id, description, created_by, finance_bucket
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     session.id, b.type, b.payment_method, Number(b.amount), amountUsd,
     rateType, rateValue, b.client_id || null, b.work_order_id || null,
-    b.quote_id || null, b.description || '', req.user.id
+    b.quote_id || null, b.description || '', req.user.id, bucket
   );
   res.status(201).json({ id: info.lastInsertRowid, amount_usd: amountUsd });
 });

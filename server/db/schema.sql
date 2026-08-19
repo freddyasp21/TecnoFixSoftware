@@ -233,7 +233,8 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   quote_id        INTEGER REFERENCES quotes(id),
   description     TEXT,
   created_by      INTEGER REFERENCES users(id),
-  created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  finance_bucket  TEXT CHECK (finance_bucket IS NULL OR finance_bucket IN ('payroll','supplies','savings','operation'))
 );
 
 -- Venta directa (mostrador) ligada a caja e inventario

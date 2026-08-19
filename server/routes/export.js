@@ -7,6 +7,13 @@ const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
 const { PAYMENT_LABELS, ORDER_STATUS } = require('../utils/helpers');
 
+const FINANCE_LABELS = {
+  payroll: 'Trabajadores',
+  supplies: 'Insumos, piezas y herramientas',
+  savings: 'Ahorros e inversión',
+  operation: 'Utilidad / operación',
+};
+
 const router = express.Router();
 router.use(authRequired, requirePermission('reports.view'));
 
@@ -133,6 +140,9 @@ const MODULES = {
       ...r,
       method_label: PAYMENT_LABELS[r.payment_method] || r.payment_method,
       type_label: r.type === 'income' ? 'Ingreso' : 'Egreso',
+      finance_bucket: r.type === 'expense'
+        ? (FINANCE_LABELS[r.finance_bucket] || 'Sin clasificar')
+        : '—',
     }));
     return {
       sheet: 'Caja',
@@ -142,6 +152,7 @@ const MODULES = {
         { header: 'Método', key: 'method_label', width: 18 },
         { header: 'Monto', key: 'amount', width: 12 },
         { header: 'Equivalente USD', key: 'amount_usd', width: 16 },
+        { header: 'Sobre financiero', key: 'finance_bucket', width: 18 },
         { header: 'Cliente', key: 'client_name', width: 24 },
         { header: 'Descripción', key: 'description', width: 32 },
       ],
@@ -161,6 +172,38 @@ const MODULES = {
         { header: 'Rol', key: 'role', width: 16 },
         { header: 'Activo', key: 'active', width: 10 },
         { header: 'Alta', key: 'created_at', width: 20 },
+      ],
+      rows,
+    };
+  },
+  finanzas: () => {
+    const rows = getDb().prepare(`
+      SELECT t.created_at, t.type, t.payment_method, t.amount, t.amount_usd,
+             t.finance_bucket, t.description, c.name AS client_name, wo.number AS order_number
+      FROM cash_transactions t
+      LEFT JOIN clients c ON c.id = t.client_id
+      LEFT JOIN work_orders wo ON wo.id = t.work_order_id
+      ORDER BY t.created_at DESC
+    `).all().map((r) => ({
+      ...r,
+      type_label: r.type === 'income' ? 'Ingreso' : 'Egreso',
+      method_label: PAYMENT_LABELS[r.payment_method] || r.payment_method,
+      bucket_label: r.type === 'expense'
+        ? (FINANCE_LABELS[r.finance_bucket] || 'Sin clasificar')
+        : 'Ingreso (se reparte en sobres)',
+    }));
+    return {
+      sheet: 'Finanzas',
+      columns: [
+        { header: 'Fecha', key: 'created_at', width: 20 },
+        { header: 'Tipo', key: 'type_label', width: 12 },
+        { header: 'Método', key: 'method_label', width: 18 },
+        { header: 'Monto', key: 'amount', width: 12 },
+        { header: 'USD', key: 'amount_usd', width: 12 },
+        { header: 'Sobre', key: 'bucket_label', width: 28 },
+        { header: 'Cliente', key: 'client_name', width: 24 },
+        { header: 'Orden', key: 'order_number', width: 12 },
+        { header: 'Descripción', key: 'description', width: 32 },
       ],
       rows,
     };

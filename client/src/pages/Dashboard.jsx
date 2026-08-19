@@ -23,9 +23,12 @@ export default function Dashboard() {
     { label: 'Pendientes', value: k.pending ?? '—', to: '/ordenes' },
     { label: 'Entregas hoy', value: k.delivered ?? '—', to: '/ordenes' },
     { label: 'Stock bajo', value: k.low_stock ?? '—', to: '/inventario' },
-    { label: 'Ingresos USD', value: usd(k.income_usd), to: '/caja' },
-    { label: 'Egresos USD', value: usd(k.expense_usd), to: '/caja' },
+    { label: 'Ingresos USD', value: usd(k.income_usd), to: can('finance.view') || can('cash.view') ? '/finanzas' : '/caja' },
+    { label: 'Egresos USD', value: usd(k.expense_usd), to: can('finance.view') || can('cash.view') ? '/finanzas' : '/caja' },
   ];
+  if (can('finance.view') || can('cash.view')) {
+    cards.push({ label: 'Gestión financiera', value: '40 / 30 / 20', to: '/finanzas' });
+  }
 
   return (
     <div>

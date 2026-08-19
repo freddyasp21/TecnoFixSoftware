@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api, downloadExcel, usd, bs, PAYMENT_METHODS } from '../api';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, downloadExcel, usd, bs, PAYMENT_METHODS, FINANCE_BUCKETS } from '../api';
 import LineItems from '../components/LineItems';
 import { ErrorBox, Field, Modal, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
@@ -10,7 +10,7 @@ export default function Cash() {
   const navigate = useNavigate();
   const { data, error, reload } = useAsync(() => api('/cash/current'));
   const [openForm, setOpenForm] = useState(null);
-  const [move, setMove] = useState({ type: 'income', payment_method: 'usd_cash', amount: '', description: '', rate_type: 'bcv' });
+  const [move, setMove] = useState({ type: 'income', payment_method: 'usd_cash', amount: '', description: '', rate_type: 'bcv', finance_bucket: 'supplies' });
   const [sale, setSale] = useState(null);
   const [closeF, setCloseF] = useState(null);
   const [collect, setCollect] = useState(null);
@@ -121,6 +121,7 @@ export default function Cash() {
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('caja')}>Exportar Excel</button>
+            <Link className="btn-ghost" to="/finanzas">Finanzas</Link>
             {can('cash.manage') && !session && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
             {can('cash.manage') && session && (
               <>
@@ -185,35 +186,57 @@ export default function Cash() {
           </div>
 
           {can('cash.manage') && (
-            <form className="card mb-6 grid gap-3 p-5 md:grid-cols-6" onSubmit={addMove}>
-              <Field label="Tipo">
-                <select value={move.type} onChange={(e) => setMove({ ...move, type: e.target.value })}>
-                  <option value="income">Ingreso</option>
-                  <option value="expense">Egreso</option>
-                </select>
-              </Field>
-              <Field label="Método">
-                <select value={move.payment_method} onChange={(e) => setMove({ ...move, payment_method: e.target.value })}>
-                  {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              </Field>
-              <Field label="Tasa (para Bs)">
-                <select value={move.rate_type} onChange={(e) => setMove({ ...move, rate_type: e.target.value })}>
-                  <option value="bcv">BCV {rates.data?.bcv || ''}</option>
-                  <option value="euro">Euro {rates.data?.euro || ''}</option>
-                  <option value="usdt">USDT {rates.data?.usdt || ''}</option>
-                </select>
-              </Field>
-              <Field label="Monto"><input type="number" step="0.01" min="0.01" value={move.amount} onChange={(e) => setMove({ ...move, amount: e.target.value })} required /></Field>
-              <Field label="Descripción"><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></Field>
-              <div className="flex items-end"><button className="btn-primary w-full">Registrar</button></div>
+            <form className="card mb-6 space-y-3 p-5" onSubmit={addMove}>
+              <div className="grid gap-3 md:grid-cols-5">
+                <Field label="Tipo">
+                  <select
+                    value={move.type}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      setMove({
+                        ...move,
+                        type,
+                        finance_bucket: type === 'expense' ? (move.finance_bucket || 'supplies') : move.finance_bucket,
+                      });
+                    }}
+                  >
+                    <option value="income">Ingreso</option>
+                    <option value="expense">Egreso</option>
+                  </select>
+                </Field>
+                <Field label="Método">
+                  <select value={move.payment_method} onChange={(e) => setMove({ ...move, payment_method: e.target.value })}>
+                    {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Tasa (para Bs)">
+                  <select value={move.rate_type} onChange={(e) => setMove({ ...move, rate_type: e.target.value })}>
+                    <option value="bcv">BCV {rates.data?.bcv || ''}</option>
+                    <option value="euro">Euro {rates.data?.euro || ''}</option>
+                    <option value="usdt">USDT {rates.data?.usdt || ''}</option>
+                  </select>
+                </Field>
+                <Field label="Monto"><input type="number" step="0.01" min="0.01" value={move.amount} onChange={(e) => setMove({ ...move, amount: e.target.value })} required /></Field>
+                <Field label="Descripción"><input value={move.description} onChange={(e) => setMove({ ...move, description: e.target.value })} /></Field>
+              </div>
+              <div className={`grid gap-3 ${move.type === 'expense' ? 'md:grid-cols-2' : ''}`}>
+                {move.type === 'expense' && (
+                  <Field label="Sobre financiero">
+                    <select value={move.finance_bucket || ''} onChange={(e) => setMove({ ...move, finance_bucket: e.target.value })}>
+                      <option value="">Sin clasificar</option>
+                      {FINANCE_BUCKETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+                    </select>
+                  </Field>
+                )}
+                <div className="flex items-end"><button className="btn-primary w-full md:w-auto">Registrar</button></div>
+              </div>
             </form>
           )}
 
           <div className="card table-wrap">
             <table className="data">
               <thead>
-                <tr><th>Hora</th><th>Tipo</th><th>Método</th><th>Monto</th><th>USD</th><th>Detalle</th></tr>
+                <tr><th>Hora</th><th>Tipo</th><th>Método</th><th>Monto</th><th>USD</th><th>Sobre</th><th>Detalle</th></tr>
               </thead>
               <tbody>
                 {(data.movements || []).map((t) => (
@@ -223,6 +246,11 @@ export default function Cash() {
                     <td>{PAYMENT_METHODS.find((m) => m.id === t.payment_method)?.label}</td>
                     <td>{t.payment_method.startsWith('bs') ? bs(t.amount) : usd(t.amount)}</td>
                     <td>{usd(t.amount_usd)}</td>
+                    <td>
+                      {t.type === 'income'
+                        ? <span className="text-xs text-slate-400">Ingreso</span>
+                        : (FINANCE_BUCKETS.find((b) => b.id === t.finance_bucket)?.label || 'Sin clasificar')}
+                    </td>
                     <td>{t.description} {t.order_number || ''} {t.client_name || ''}</td>
                   </tr>
                 ))}

@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Wrench, CalendarDays, Boxes, Package,
-  Users, Wallet, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
+  Users, Wallet, Banknote, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
 } from 'lucide-react';
 import { useAuth } from '../auth';
 
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/inventario', label: 'Inventario', icon: Boxes, perm: 'inventory.view' },
   { to: '/clientes', label: 'Clientes', icon: Users, perm: 'clients.view' },
   { to: '/caja', label: 'Caja', icon: Wallet, perm: 'cash.view' },
+  { to: '/finanzas', label: 'Finanzas', icon: Banknote, anyOf: ['finance.view', 'cash.view'] },
   { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, perm: 'rates.view' },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
   { to: '/usuarios', label: 'Usuarios', icon: UserCog, perm: 'users.manage' },
@@ -25,8 +26,8 @@ export default function Layout() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
-      <aside className="no-print flex w-64 shrink-0 flex-col bg-ink-900 text-slate-300">
+    <div className="flex h-screen overflow-hidden bg-slate-100">
+      <aside className="no-print flex h-full w-64 shrink-0 flex-col bg-ink-900 text-slate-300">
         <div className="flex items-center gap-3 px-5 py-5">
           <img src="/logo.svg" alt="Tecno Fix" className="h-10 w-10 rounded-xl" />
           <div>
@@ -34,8 +35,8 @@ export default function Layout() {
             <div className="text-[11px] uppercase tracking-wider text-sky-300/80">Software para talleres</div>
           </div>
         </div>
-        <nav className="flex-1 space-y-0.5 px-3 pb-4">
-          {NAV.filter((item) => can(item.perm)).map((item) => (
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
+          {NAV.filter((item) => (item.anyOf ? item.anyOf.some((p) => can(p)) : can(item.perm))).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -64,7 +65,7 @@ export default function Layout() {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 p-6 lg:p-8">
+      <main className="min-w-0 flex-1 overflow-y-auto p-6 lg:p-8">
         <Outlet />
       </main>
     </div>

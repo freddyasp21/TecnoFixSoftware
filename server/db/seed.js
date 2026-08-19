@@ -25,6 +25,8 @@ const PERMISSIONS = [
   ['clients.manage', 'clientes', 'Crear y editar clientes'],
   ['cash.view', 'caja', 'Consultar caja'],
   ['cash.manage', 'caja', 'Abrir/cerrar caja y registrar movimientos'],
+  ['finance.view', 'finanzas', 'Consultar gestión financiera'],
+  ['finance.manage', 'finanzas', 'Ajustar reglas y clasificar egresos'],
   ['reports.view', 'reportes', 'Ver reportes y exportar Excel'],
   ['settings.manage', 'configuracion', 'Ajustes, IVA y actualizaciones'],
 ];
@@ -42,7 +44,7 @@ const ROLE_PERMS = {
     'catalog.view', 'quotes.view', 'quotes.manage',
     'orders.view', 'orders.manage', 'calendar.view', 'inventory.view',
     'clients.view', 'clients.manage',
-    'cash.view', 'cash.manage', 'reports.view',
+    'cash.view', 'cash.manage', 'finance.view', 'finance.manage', 'reports.view',
   ],
 };
 
@@ -99,6 +101,9 @@ function seed(db) {
     quote_seq: '0',
     order_seq: '0',
     sale_seq: '0',
+    finance_pct_payroll: '40',
+    finance_pct_supplies: '30',
+    finance_pct_savings: '20',
     app_version: require('../../package.json').version,
   };
   for (const [k, v] of Object.entries(defaults)) set.run(k, v);

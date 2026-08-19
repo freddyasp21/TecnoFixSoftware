@@ -63,6 +63,13 @@ export const usd = (n) =>
 export const bs = (n) =>
   `${new Intl.NumberFormat('es-VE', { maximumFractionDigits: 2 }).format(Number(n) || 0)} Bs`;
 
+export const FINANCE_BUCKETS = [
+  { id: 'payroll', label: 'Trabajadores' },
+  { id: 'supplies', label: 'Insumos, piezas y herramientas' },
+  { id: 'savings', label: 'Ahorros e inversión' },
+  { id: 'operation', label: 'Utilidad / operación' },
+];
+
 export const PAYMENT_METHODS = [
   { id: 'usd_cash', label: 'USD efectivo' },
   { id: 'bs_cash', label: 'Bs efectivo' },

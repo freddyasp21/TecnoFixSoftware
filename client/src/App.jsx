@@ -16,6 +16,7 @@ import Inventory from './pages/Inventory';
 import Clients from './pages/Clients';
 import ClientDetail from './pages/ClientDetail';
 import Cash from './pages/Cash';
+import Finance from './pages/Finance';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="clientes" element={<Clients />} />
         <Route path="clientes/:id" element={<ClientDetail />} />
         <Route path="caja" element={<Cash />} />
+        <Route path="finanzas" element={<Finance />} />
         <Route path="reportes" element={<Reports />} />
         <Route path="configuracion" element={<Settings />} />
       </Route>
