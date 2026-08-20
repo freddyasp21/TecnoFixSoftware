@@ -25,10 +25,12 @@ app Taller/
 ├── server/                 # API Express + SQLite
 │   ├── db/schema.sql       # Modelo de datos
 │   ├── db/database.js      # Conexión WAL
+│   ├── db/migrate.js       # Permisos y columnas en bases ya creadas
 │   ├── db/seed.js          # Admin, roles y catálogo inicial
 │   ├── middleware/auth.js  # JWT + requirePermission()
 │   ├── routes/             # Un archivo por módulo
-│   └── services/inventory.js
+│   ├── services/           # Inventario, alertas
+│   └── utils/payroll.js    # Nómina quincenal (1-15 / 16-último)
 ├── electron/               # Contenedor nativo + actualizador
 │   ├── main.js
 │   ├── preload.js
@@ -86,8 +88,8 @@ npm start
 | Rol | Alcance típico |
 |-----|----------------|
 | **Administrador** | Todo, incluida configuración de permisos |
-| **Técnico** | Órdenes, catálogo, calendario, clientes. Sin caja ni borrar órdenes |
-| **Cajero** | Caja, cotizaciones, clientes, reportes. **Sin** editar inventario ni eliminar órdenes |
+| **Técnico** | Órdenes, catálogo, calendario, clientes, alertas. Sin caja ni borrar órdenes |
+| **Cajero** | Caja, cotizaciones, clientes, finanzas, trabajadores, reportes. **Sin** editar inventario ni eliminar órdenes |
 
 Los permisos se editan en **Usuarios → Permisos por rol**. Las contraseñas se guardan con **bcrypt**. El JWT dura 14 horas (jornada de taller).
 
@@ -96,16 +98,19 @@ Los permisos se editan en **Usuarios → Permisos por rol**. Las contraseñas se
 ## 5. Módulos
 
 1. **Login / usuarios / RBAC** — altas, activar/desactivar, reset de clave  
-2. **Tasas** — BCV, Dólar € y USDT (Bs), snapshot en cada documento  
-3. **Catálogo** — productos (stock) y servicios; autocompletado en cotizaciones/caja  
-4. **Cotizaciones** — IVA opcional, conversión a orden en un clic  
-5. **Órdenes** — correlativo `OT-0001`, estados, técnico, comprobante de impresión  
-6. **Calendario** — vistas día / semana / mes, días laborados  
-7. **Inventario** — kardex; salida automática al usar un producto en orden o venta  
-8. **Clientes** — ficha + historial de equipos y servicios  
-9. **Caja** — apertura/cierre, IVA 16% (switch), **solo 4 métodos de pago:** USD efectivo, Bs efectivo, pago móvil Bs, USDT Binance  
-10. **Reportes** — rango de fechas + botones **Exportar Excel (.xlsx)**  
-11. **Ajustes** — datos del taller, IVA, botón **Buscar actualizaciones**
+2. **Alertas** — tablero en vivo (sin copiar datos): stock bajo, nómina pendiente de la quincena, piezas de órdenes en «esperando repuesto» y órdenes listas para entregar  
+3. **Tasas** — BCV, Dólar € y USDT (Bs), snapshot en cada documento  
+4. **Catálogo** — productos (stock) y servicios; autocompletado en cotizaciones/caja  
+5. **Cotizaciones** — IVA opcional. Si el cliente aprueba, pasa a Caja; la orden se crea **solo al cobrar**  
+6. **Órdenes** — correlativo `OT-0001`, estados, técnico, comprobante de impresión  
+7. **Calendario** — vistas día / semana / mes, días laborados del taller  
+8. **Inventario** — kardex; salida automática al usar un producto en orden o venta  
+9. **Clientes** — ficha + historial de equipos y servicios  
+10. **Trabajadores** — plantilla, días laborados y salario quincenal (1-15 / 16-último) a partir del **40%** de los ingresos de caja; el pago se hace **desde Caja**  
+11. **Caja** — apertura/cierre, IVA 16% (switch), **solo 4 métodos de pago:** USD efectivo, Bs efectivo, pago móvil Bs, USDT Binance  
+12. **Gestión financiera** — cada ingreso se reparte en sobres: **40%** trabajadores, **30%** insumos/piezas/herramientas, **20%** ahorro e inversión, **10%** utilidad/operación; los egresos de caja (incluida la nómina) descuentan del sobre correspondiente  
+13. **Reportes** — rango de fechas + botones **Exportar Excel (.xlsx)**  
+14. **Ajustes** — datos del taller, IVA, botón **Buscar actualizaciones**
 
 ---
 
@@ -207,11 +212,14 @@ Todas las rutas JSON van bajo `/api` y, salvo `/auth/login` y `/health`, requier
 | `/api/calendar` | Calendario y días laborados |
 | `/api/inventory` | Stock y kardex |
 | `/api/clients` | Clientes e historial |
-| `/api/cash` | Caja, movimientos, venta directa |
+| `/api/workers` | Plantilla, asistencia y pago de nómina quincenal |
+| `/api/cash` | Caja, movimientos, venta directa, cobro de cotización |
+| `/api/finance` | Sobres financieros y clasificación de egresos |
+| `/api/alerts` | Alertas agregadas (`GET /` y `GET /summary`) |
 | `/api/reports` | Analítica |
-| `/api/export/:modulo` | Excel: `clientes`, `catalogo`, `inventario`, `cotizaciones`, `ordenes`, `caja`, `usuarios` |
+| `/api/export/:modulo` | Excel: `clientes`, `catalogo`, `inventario`, `cotizaciones`, `ordenes`, `caja`, `finanzas`, `trabajadores`, `nomina`, `usuarios` |
 | `/api/settings` | Ajustes, IVA, `GET /updates` |
 
 ---
 
-Tecno Fix está pensado para correr **en la PC del taller**, con datos propios, IVA conmutable y cuadre de caja discriminado por las cuatro formas de cobro exigidas.
+Tecno Fix está pensado para correr **en la PC del taller**, con datos propios, IVA conmutable, cuadre de caja por las cuatro formas de cobro, nómina quincenal y alertas ligadas a los módulos de origen.

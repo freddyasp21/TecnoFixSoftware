@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, downloadExcel, usd, statusMeta, ORDER_STATUS } from '../api';
 import { Badge, ErrorBox, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function Orders() {
   const { can } = useAuth();
-  const [status, setStatus] = useState('');
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [q, setQ] = useState('');
   const { data, error, reload } = useAsync(() => {
     const p = new URLSearchParams();

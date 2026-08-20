@@ -1,12 +1,15 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Wrench, CalendarDays, Boxes, Package,
-  Users, HardHat, Wallet, Banknote, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
+  Users, HardHat, Wallet, Banknote, Bell, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
 } from 'lucide-react';
 import { useAuth } from '../auth';
+import { api } from '../api';
+import { useAsync } from './ui';
 
 const NAV = [
   { to: '/', label: 'Panel', icon: LayoutDashboard, perm: 'dashboard.view' },
+  { to: '/alertas', label: 'Alertas', icon: Bell, anyOf: ['alerts.view', 'dashboard.view'] },
   { to: '/cotizaciones', label: 'Cotizaciones', icon: FileText, perm: 'quotes.view' },
   { to: '/ordenes', label: 'Órdenes', icon: Wrench, perm: 'orders.view' },
   { to: '/calendario', label: 'Calendario', icon: CalendarDays, perm: 'calendar.view' },
@@ -25,6 +28,11 @@ const NAV = [
 export default function Layout() {
   const { user, can, logout } = useAuth();
   const navigate = useNavigate();
+  const alertsQ = useAsync(async () => {
+    try { return await api('/alerts/summary'); }
+    catch { return { counts: { total: 0 } }; }
+  }, [user?.id]);
+  const alertCount = Number(alertsQ.data?.counts?.total) || 0;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
@@ -49,7 +57,12 @@ export default function Layout() {
               }
             >
               <item.icon size={18} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.to === '/alertas' && alertCount > 0 && (
+                <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {alertCount > 99 ? '99+' : alertCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

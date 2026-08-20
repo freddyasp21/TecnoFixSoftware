@@ -94,9 +94,11 @@ function migrate(db) {
   addPermission(db, 'finance.manage', 'finanzas', 'Ajustar reglas y clasificar egresos');
   addPermission(db, 'workers.view', 'trabajadores', 'Consultar trabajadores y nómina');
   addPermission(db, 'workers.manage', 'trabajadores', 'Editar plantilla, asistencia y pagar nómina');
+  addPermission(db, 'alerts.view', 'alertas', 'Ver alertas operativas del taller');
 
   linkAllRoles(db, 'finance.view');
   linkAllRoles(db, 'workers.view');
+  linkAllRoles(db, 'alerts.view');
   linkRoles(db, 'finance.manage', ['Administrador', 'Cajero']);
   linkRoles(db, 'workers.manage', ['Administrador', 'Cajero']);
 

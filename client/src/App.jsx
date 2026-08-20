@@ -18,6 +18,7 @@ import ClientDetail from './pages/ClientDetail';
 import Cash from './pages/Cash';
 import Finance from './pages/Finance';
 import Workers from './pages/Workers';
+import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
@@ -41,6 +42,7 @@ export default function App() {
       <Route path="/ordenes/:id/imprimir" element={<Guard><OrderPrint /></Guard>} />
       <Route path="/" element={<Guard><Layout /></Guard>}>
         <Route index element={<Dashboard />} />
+        <Route path="alertas" element={<Alerts />} />
         <Route path="usuarios" element={<Users />} />
         <Route path="tasas" element={<Rates />} />
         <Route path="catalogo" element={<Catalog />} />

@@ -32,6 +32,9 @@ export default function Dashboard() {
   if (can('workers.view') || can('cash.view')) {
     cards.push({ label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' });
   }
+  if (can('alerts.view') || can('dashboard.view')) {
+    cards.push({ label: 'Alertas', value: 'Pendientes', to: '/alertas' });
+  }
 
   return (
     <div>
