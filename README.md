@@ -26,7 +26,7 @@ app Taller/
 │   ├── db/schema.sql       # Modelo de datos
 │   ├── db/database.js      # Conexión WAL
 │   ├── db/migrate.js       # Permisos y columnas en bases ya creadas
-│   ├── db/seed.js          # Admin, roles y catálogo inicial
+│   ├── db/seed.js          # Admin, roles y ajustes (sin datos de negocio)
 │   ├── middleware/auth.js  # JWT + requirePermission()
 │   ├── routes/             # Un archivo por módulo
 │   ├── services/           # Inventario, alertas
@@ -67,7 +67,7 @@ npm run dev
 |---------|------------|-----|
 | `admin` | `Admin123!` | Administrador (acceso total) |
 
-Cambie esa clave en **Ajustes** o desde **Usuarios**.
+Cambie esa clave en **Ajustes** o desde **Usuarios**. El catálogo, clientes, caja y órdenes arrancan vacíos: el taller carga su propia información.
 
 Escritorio en caliente (Vite + Electron):
 

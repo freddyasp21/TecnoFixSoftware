@@ -56,12 +56,12 @@ function seed(db) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (count > 0) return;
 
-  const insertRole = db.prepare('INSERT INTO roles (name, description, is_system) VALUES (?, ?, 1)');
+  const insertRole = db.prepare('INSERT OR IGNORE INTO roles (name, description, is_system) VALUES (?, ?, 1)');
   insertRole.run('Administrador', 'Acceso total al sistema');
   insertRole.run('Tecnico', 'Gestión de órdenes, catálogo y calendario');
   insertRole.run('Cajero', 'Caja, cotizaciones y clientes. Sin borrar órdenes ni editar inventario');
 
-  const insertPerm = db.prepare('INSERT INTO permissions (code, module, description) VALUES (?, ?, ?)');
+  const insertPerm = db.prepare('INSERT OR IGNORE INTO permissions (code, module, description) VALUES (?, ?, ?)');
   for (const [code, module, description] of PERMISSIONS) {
     insertPerm.run(code, module, description);
   }
@@ -69,7 +69,7 @@ function seed(db) {
   const roles = db.prepare('SELECT id, name FROM roles').all();
   const perms = db.prepare('SELECT id, code FROM permissions').all();
   const permByCode = Object.fromEntries(perms.map((p) => [p.code, p.id]));
-  const link = db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)');
+  const link = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)');
 
   const tx = db.transaction(() => {
     for (const role of roles) {
@@ -90,7 +90,7 @@ function seed(db) {
     VALUES (?, ?, ?, ?, 1)
   `).run('admin', hash, 'Administrador', adminRoleId);
 
-  const set = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+  const set = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   const defaults = {
     shop_name: 'Tecno Fix',
     shop_subtitle: 'Software para talleres',
@@ -111,18 +111,6 @@ function seed(db) {
     app_version: require('../../package.json').version,
   };
   for (const [k, v] of Object.entries(defaults)) set.run(k, v);
-
-  // Catálogo de ejemplo para poder cotizar desde el primer arranque
-  const cat = db.prepare(`
-    INSERT INTO catalog_items (type, code, name, description, price_usd, stock, min_stock, estimated_minutes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  cat.run('service', 'SRV-DIAG', 'Diagnóstico general', 'Revisión y presupuesto de falla', 8, 0, 0, 30);
-  cat.run('service', 'SRV-SOFT', 'Instalación de software / SO', 'Formateo e instalación de sistema', 25, 0, 0, 90);
-  cat.run('service', 'SRV-MANT', 'Mantenimiento preventivo', 'Limpieza interna y pasta térmica', 18, 0, 0, 60);
-  cat.run('product', 'REP-SSD256', 'Disco SSD 256GB', 'Unidad de estado sólido SATA', 28, 5, 2, 0);
-  cat.run('product', 'REP-RAM8', 'Memoria RAM 8GB DDR4', 'Módulo SODIMM/DIMM', 22, 4, 1, 0);
-  cat.run('product', 'ACC-MOUSE', 'Mouse USB', 'Periférico de reposición', 6, 10, 3, 0);
 }
 
 module.exports = { seed };
