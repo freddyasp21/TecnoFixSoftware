@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Wrench, CalendarDays, Boxes, Package,
-  Users, HardHat, Wallet, Banknote, Bell, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
+  Users, HardHat, Wallet, Banknote, Bell, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut, Upload,
 } from 'lucide-react';
 import { useAuth } from '../auth';
 import { api } from '../api';
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/finanzas', label: 'Finanzas', icon: Banknote, admin: true },
   { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, everyone: true },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
+  { to: '/importar', label: 'Importar', icon: Upload, admin: true },
   { to: '/usuarios', label: 'Usuarios', icon: UserCog, perm: 'users.manage' },
   { to: '/configuracion', label: 'Ajustes', icon: Settings, perm: 'settings.manage' },
 ];

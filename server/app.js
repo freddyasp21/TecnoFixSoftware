@@ -15,7 +15,7 @@ function createApp() {
   const app = express();
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json({ limit: '4mb' }));
+  app.use(express.json({ limit: '8mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, name: 'Tecno Fix', version: require('../package.json').version });
@@ -38,6 +38,7 @@ function createApp() {
   app.use('/api/reports', require('./routes/reports'));
   app.use('/api/settings', require('./routes/settings'));
   app.use('/api/export', require('./routes/export'));
+  app.use('/api/import', require('./routes/import'));
 
   app.use((err, _req, res, _next) => {
     console.error('[Tecno Fix]', err);

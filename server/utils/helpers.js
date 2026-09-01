@@ -32,7 +32,7 @@ function localDate(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-const RATE_REQUIRED_MSG = 'Debe actualizar las tasas del día (BCV, Euro y USDT) antes de abrir caja, cotizar o crear una orden.';
+const RATE_REQUIRED_MSG = 'Debe actualizar las tasas del día (BCV, Euro y USDT) antes de abrir caja o cotizar.';
 
 /** Tasa registrada hoy. Si no hay fila del día, null (no se reutiliza la de ayer). */
 function todayRate(db) {

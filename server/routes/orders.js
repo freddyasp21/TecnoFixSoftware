@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
-const { getSetting, nextNumber, computeTotals, todayRateOr409 } = require('../utils/helpers');
+const { computeTotals } = require('../utils/helpers');
 const { deductProducts, restoreProducts } = require('../services/inventory');
 
 const router = express.Router();
@@ -86,39 +86,10 @@ function saveItems(db, orderId, items, ivaEnabled, ivaRate, userId, previousItem
   `).run(totals.subtotal, totals.iva_amount, totals.total, orderId);
 }
 
-router.post('/', requirePermission('orders.manage'), (req, res) => {
-  const b = req.body || {};
-  const db = getDb();
-  const rate = todayRateOr409(db, res);
-  if (!rate) return;
-  const rateType = b.rate_type || 'bcv';
-  const rateValue = Number(b.rate_value) || rate[rateType];
-  const ivaEnabled = b.iva_enabled != null ? (b.iva_enabled ? 1 : 0) : (getSetting(db, 'iva_enabled') === '1' ? 1 : 0);
-  const ivaRate = Number(b.iva_rate) || Number(getSetting(db, 'iva_rate', '16'));
-
-  try {
-    const id = db.transaction(() => {
-      const number = nextNumber(db, 'order_seq', 'OT');
-      const info = db.prepare(`
-        INSERT INTO work_orders (
-          number, client_id, technician_id, status,
-          device_brand, device_model, serial_number, device_password,
-          fault_description, physical_notes,
-          rate_type, rate_value, iva_enabled, iva_rate, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        number, b.client_id || null, b.technician_id || null, b.status || 'recibido',
-        b.device_brand || '', b.device_model || '', b.serial_number || '',
-        b.device_password || '', b.fault_description || '', b.physical_notes || '',
-        rateType, rateValue, ivaEnabled, ivaRate, req.user.id
-      );
-      saveItems(db, info.lastInsertRowid, b.items || [], ivaEnabled, ivaRate, req.user.id, []);
-      return info.lastInsertRowid;
-    })();
-    res.status(201).json(hydrate(db.prepare('SELECT * FROM work_orders WHERE id = ?').get(id)));
-  } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message });
-  }
+router.post('/', requirePermission('orders.manage'), (_req, res) => {
+  return res.status(400).json({
+    error: 'La orden solo se crea al cobrar una cotización aprobada en caja.',
+  });
 });
 
 router.put('/:id', requirePermission('orders.manage'), (req, res) => {

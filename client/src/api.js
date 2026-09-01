@@ -38,7 +38,11 @@ export async function api(path, { method = 'GET', body, raw } = {}) {
 
   if (raw) return res;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error || 'Error de servidor', res.status);
+  if (!res.ok) {
+    const err = new ApiError(data.error || 'Error de servidor', res.status);
+    if (Array.isArray(data.errors)) err.errors = data.errors;
+    throw err;
+  }
   return data;
 }
 
@@ -55,6 +59,38 @@ export async function downloadExcel(moduleName) {
   a.download = `tecnofix-${moduleName}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export async function downloadImportTemplate(moduleName) {
+  const res = await api(`/import/template/${moduleName}`, { raw: true });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(data.error || 'No se pudo descargar la plantilla', res.status);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tecnofix-plantilla-${moduleName}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function parseImportFile(file, moduleHint) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  headers['Content-Type'] = 'application/octet-stream';
+  headers['X-Filename'] = encodeURIComponent(file.name);
+  if (moduleHint) headers['X-Module'] = moduleHint;
+  const res = await fetch('/api/import/parse', { method: 'POST', headers, body: file });
+  if (res.status === 401) {
+    setToken(null);
+    window.location.href = '/login';
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || 'No se pudo leer el archivo', res.status);
+  return data;
 }
 
 export const usd = (n) =>

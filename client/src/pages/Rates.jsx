@@ -28,7 +28,7 @@ export default function Rates() {
         <div className="mb-6 rounded-2xl border-2 border-rose-400 bg-rose-100 p-5">
           <h2 className="font-semibold text-rose-950">Tasa del día pendiente</h2>
           <p className="mt-1 text-sm text-rose-900">
-            Sin tasas de hoy no se puede abrir caja, cotizar ni crear una orden.
+            Sin tasas de hoy no se puede abrir caja ni cotizar. La orden se crea al cobrar la cotización.
           </p>
         </div>
       )}

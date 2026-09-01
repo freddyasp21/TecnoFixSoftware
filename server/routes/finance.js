@@ -48,6 +48,8 @@ router.get('/', (req, res) => {
   const spent = Object.fromEntries(spentRows.map((r) => [r.bucket, r.amount_usd]));
 
   const income = round2(totals.income_usd);
+  const ivaRate = Number(getSetting(db, 'iva_rate', '16')) || 16;
+  const iva_usd = round2(income * ivaRate / 100);
   const envelopes = BUCKETS.map((b) => {
     const allocated = round2(income * (pct[b.id] / 100));
     const used = round2(spent[b.id] || 0);
@@ -99,6 +101,8 @@ router.get('/', (req, res) => {
     from,
     to,
     income_usd: income,
+    iva_rate: ivaRate,
+    iva_usd,
     expense_usd: round2(totals.expense_usd),
     net_usd: round2(income - totals.expense_usd),
     unclassified_expense_usd: round2(spent.unclassified || 0),

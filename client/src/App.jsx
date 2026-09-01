@@ -21,6 +21,7 @@ import Workers from './pages/Workers';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import ImportData from './pages/ImportData';
 
 function Guard({ children }) {
   const { user, ready } = useAuth();
@@ -56,7 +57,7 @@ export default function App() {
         <Route path="cotizaciones/nueva" element={<QuoteForm />} />
         <Route path="cotizaciones/:id" element={<QuoteForm />} />
         <Route path="ordenes" element={<Orders />} />
-        <Route path="ordenes/nueva" element={<OrderForm />} />
+        <Route path="ordenes/nueva" element={<Navigate to="/cotizaciones/nueva" replace />} />
         <Route path="ordenes/:id" element={<OrderForm />} />
         <Route path="calendario" element={<CalendarPage />} />
         <Route path="inventario" element={<Inventory />} />
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="finanzas" element={<AdminOnly><Finance /></AdminOnly>} />
         <Route path="trabajadores" element={<AdminOnly><Workers /></AdminOnly>} />
         <Route path="reportes" element={<Reports />} />
+        <Route path="importar" element={<AdminOnly><ImportData /></AdminOnly>} />
         <Route path="configuracion" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

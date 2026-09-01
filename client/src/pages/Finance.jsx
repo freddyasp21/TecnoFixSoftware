@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, downloadExcel, usd, FINANCE_BUCKETS, PAYMENT_METHODS } from '../api';
 import { ErrorBox, Field, PageHeader, useAsync } from '../components/ui';
@@ -7,8 +7,9 @@ import { useAuth } from '../auth';
 const ENVELOPE_STYLE = {
   payroll: { bar: 'bg-sky-500', wrap: 'bg-sky-50 border-sky-100', pct: 'text-sky-700' },
   supplies: { bar: 'bg-amber-500', wrap: 'bg-amber-50 border-amber-100', pct: 'text-amber-800' },
-  savings: { bar: 'bg-emerald-500', wrap: 'bg-emerald-50 border-emerald-100', pct: 'text-emerald-800' },
+  savings: { bar: 'bg-emerald-500', wrap: 'bg-emerald-50 border-emerald-100', pct: 'text-emerald-700' },
   operation: { bar: 'bg-slate-500', wrap: 'bg-slate-50 border-slate-200', pct: 'text-slate-700' },
+  iva: { bar: 'bg-violet-500', wrap: 'bg-violet-50 border-violet-100', pct: 'text-violet-800' },
 };
 
 function monthStart() {
@@ -43,6 +44,22 @@ export default function Finance() {
 
   const envelopes = data?.envelopes || [];
   const restPct = Math.max(0, 100 - Number(rulesForm.payroll || 0) - Number(rulesForm.supplies || 0) - Number(rulesForm.savings || 0));
+  const envelopeCards = useMemo(() => {
+    const ivaRate = Number(data?.iva_rate ?? 16);
+    const cards = [
+      ...envelopes,
+      {
+        id: 'iva',
+        label: 'IVA',
+        hint: `${ivaRate}% del total que ingresa por caja. Reserva fiscal, no se reparte en los otros sobres.`,
+        pct: ivaRate,
+        allocated: Number(data?.iva_usd) || 0,
+        spent: null,
+        remaining: null,
+      },
+    ];
+    return cards.sort((a, b) => Number(b.pct) - Number(a.pct) || String(a.label).localeCompare(String(b.label)));
+  }, [envelopes, data?.iva_rate, data?.iva_usd]);
 
   async function saveRules(e) {
     e.preventDefault();
@@ -92,7 +109,7 @@ export default function Finance() {
         <div className="w-[180px]"><Field label="Hasta"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field></div>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         <div className="card p-4">
           <div className="text-xs font-semibold uppercase text-slate-500">Ingresos (caja)</div>
           <div className="mt-1 text-2xl font-bold text-emerald-700">{usd(data?.income_usd)}</div>
@@ -105,6 +122,11 @@ export default function Finance() {
           <div className="text-xs font-semibold uppercase text-slate-500">Neto</div>
           <div className="mt-1 text-2xl font-bold">{usd(data?.net_usd)}</div>
         </div>
+        <div className="card border-violet-100 bg-violet-50 p-4">
+          <div className="text-xs font-semibold uppercase text-violet-800">IVA {data?.iva_rate ?? 16}%</div>
+          <div className="mt-1 text-2xl font-bold text-violet-950">{usd(data?.iva_usd)}</div>
+          <div className="mt-1 text-xs text-violet-800/80">Del total que ingresa por caja</div>
+        </div>
       </div>
 
       {!!data?.unclassified_expense_usd && (
@@ -113,37 +135,44 @@ export default function Finance() {
         </div>
       )}
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        {envelopes.map((env) => {
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-5">
+        {envelopeCards.map((env) => {
           const style = ENVELOPE_STYLE[env.id] || ENVELOPE_STYLE.operation;
-          const over = env.remaining < 0;
+          const isIva = env.id === 'iva';
+          const over = !isIva && env.remaining < 0;
           const usedPct = env.allocated > 0
             ? Math.min(100, (env.spent / env.allocated) * 100)
             : (env.spent > 0 ? 100 : 0);
           return (
-            <div key={env.id} className={`card border p-5 ${style.wrap}`}>
+            <div key={env.id} className={`card border p-4 md:p-3 lg:p-5 ${style.wrap}`}>
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <div className="font-semibold text-ink-900">{env.label}</div>
-                  <p className="mt-0.5 text-xs text-slate-500">{env.hint}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{env.hint}</p>
                 </div>
-                <div className={`text-lg font-bold ${style.pct}`}>{env.pct}%</div>
+                <div className={`shrink-0 text-lg font-bold ${style.pct}`}>{env.pct}%</div>
               </div>
-              <div className="mt-4 text-2xl font-bold text-ink-900">{usd(env.allocated)}</div>
-              <div className="text-xs text-slate-500">Asignado de los ingresos del período</div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80">
-                <div className={`h-full ${over ? 'bg-rose-500' : style.bar}`} style={{ width: `${usedPct}%` }} />
+              <div className="mt-3 text-xl font-bold text-ink-900 lg:mt-4 lg:text-2xl">{usd(env.allocated)}</div>
+              <div className="text-xs text-slate-500">
+                {isIva ? 'A reservar sobre ingresos de caja' : 'Asignado de los ingresos del período'}
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <div className="text-xs uppercase text-slate-500">Gastado</div>
-                  <div className="font-semibold text-rose-700">{usd(env.spent)}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase text-slate-500">{over ? 'Excedido' : 'Disponible'}</div>
-                  <div className={`font-semibold ${over ? 'text-rose-700' : 'text-emerald-700'}`}>{usd(env.remaining)}</div>
-                </div>
-              </div>
+              {!isIva && (
+                <>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80">
+                    <div className={`h-full ${over ? 'bg-rose-500' : style.bar}`} style={{ width: `${usedPct}%` }} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs uppercase text-slate-500">Gastado</div>
+                      <div className="font-semibold text-rose-700">{usd(env.spent)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase text-slate-500">{over ? 'Excedido' : 'Disponible'}</div>
+                      <div className={`font-semibold ${over ? 'text-rose-700' : 'text-emerald-700'}`}>{usd(env.remaining)}</div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           );
         })}

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, downloadExcel, usd, statusMeta, ORDER_STATUS } from '../api';
-import RateGate from '../components/RateGate';
 import { Badge, ErrorBox, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -16,8 +15,6 @@ export default function Orders() {
     if (q) p.set('q', q);
     return api(`/orders?${p}`);
   }, [status, q]);
-  const ratesQ = useAsync(() => api('/rates/today').catch(() => null));
-  const ratesMissing = !ratesQ.loading && !ratesQ.data;
 
   async function remove(id) {
     if (!confirm('¿Eliminar la orden y devolver el stock? El cobro en caja, si existiera, se conserva.')) return;
@@ -34,12 +31,11 @@ export default function Orders() {
     <div>
       <PageHeader
         title="Órdenes de trabajo"
-        subtitle="Numeración correlativa, estados y asignación de técnico"
+        subtitle="La orden se crea al cobrar la cotización en caja. Aquí se sigue el trabajo, estados y técnico."
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('ordenes')}>Exportar Excel</button>
-            {can('orders.manage') && !ratesMissing && <Link className="btn-primary" to="/ordenes/nueva">Nueva orden</Link>}
-            {can('orders.manage') && ratesMissing && <Link className="btn-primary" to="/tasas">Actualizar tasa</Link>}
+            {can('quotes.manage') && <Link className="btn-primary" to="/cotizaciones/nueva">Nueva cotización</Link>}
           </>
         }
       />
@@ -51,7 +47,6 @@ export default function Orders() {
         </select>
       </div>
       <ErrorBox error={error} />
-      {ratesMissing && <RateGate action="crear una orden" />}
       <div className="card table-wrap">
         <table className="data">
           <thead>

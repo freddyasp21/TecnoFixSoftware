@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api, usd, bs, ORDER_STATUS, computeTotals } from '../api';
 import LineItems from '../components/LineItems';
-import RateGate from '../components/RateGate';
 import { ErrorBox, Field, PageHeader, Switch } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -12,8 +11,6 @@ export default function OrderForm() {
   const { can } = useAuth();
   const [clients, setClients] = useState([]);
   const [techs, setTechs] = useState([]);
-  const [rates, setRates] = useState(null);
-  const [ratesReady, setRatesReady] = useState(false);
   const [error, setError] = useState('');
   const [number, setNumber] = useState('');
   const [form, setForm] = useState({
@@ -24,33 +21,21 @@ export default function OrderForm() {
   });
 
   useEffect(() => {
+    if (!id) return;
     api('/clients').then(setClients).catch(() => {});
     api('/orders/lookups/technicians').then(setTechs).catch(() => {});
-    api('/settings').then((s) => {
-      if (!id) setForm((f) => ({ ...f, iva_enabled: s.iva_enabled === '1', iva_rate: Number(s.iva_rate) || 16 }));
-    }).catch(() => {});
-    api('/rates/today').then((r) => {
-      setRates(r);
-      if (r && !id) setForm((f) => ({ ...f, rate_value: r[f.rate_type] || 1 }));
-    }).catch(() => {}).finally(() => setRatesReady(true));
-    if (id) {
-      api(`/orders/${id}`).then((o) => {
-        setNumber(o.number);
-        setForm({
-          client_id: o.client_id || '', technician_id: o.technician_id || '', status: o.status,
-          device_brand: o.device_brand || '', device_model: o.device_model || '',
-          serial_number: o.serial_number || '', device_password: o.device_password || '',
-          fault_description: o.fault_description || '', physical_notes: o.physical_notes || '',
-          rate_type: o.rate_type, rate_value: o.rate_value, iva_enabled: !!o.iva_enabled,
-          iva_rate: o.iva_rate, items: o.items || [],
-        });
-      }).catch((e) => setError(e.message));
-    }
+    api(`/orders/${id}`).then((o) => {
+      setNumber(o.number);
+      setForm({
+        client_id: o.client_id || '', technician_id: o.technician_id || '', status: o.status,
+        device_brand: o.device_brand || '', device_model: o.device_model || '',
+        serial_number: o.serial_number || '', device_password: o.device_password || '',
+        fault_description: o.fault_description || '', physical_notes: o.physical_notes || '',
+        rate_type: o.rate_type, rate_value: o.rate_value, iva_enabled: !!o.iva_enabled,
+        iva_rate: o.iva_rate, items: o.items || [],
+      });
+    }).catch((e) => setError(e.message));
   }, [id]);
-
-  useEffect(() => {
-    if (rates && !id) setForm((f) => ({ ...f, rate_value: rates[f.rate_type] || f.rate_value }));
-  }, [form.rate_type, rates]);
 
   const totals = useMemo(
     () => computeTotals(form.items, form.iva_enabled, form.iva_rate),
@@ -59,34 +44,25 @@ export default function OrderForm() {
 
   async function save(e) {
     e.preventDefault();
+    if (!id) return;
     setError('');
     try {
       const body = { ...form, client_id: form.client_id || null, technician_id: form.technician_id || null };
-      const saved = id
-        ? await api(`/orders/${id}`, { method: 'PUT', body })
-        : await api('/orders', { method: 'POST', body });
+      const saved = await api(`/orders/${id}`, { method: 'PUT', body });
       navigate(`/ordenes/${saved.id}`);
     } catch (err) { setError(err.message); }
   }
 
-  const blockedNew = !id && ratesReady && !rates;
-  if (blockedNew) {
-    return (
-      <div>
-        <PageHeader title="Nueva orden de trabajo" subtitle="Al guardar productos se descuenta el inventario automáticamente" />
-        <RateGate action="crear una orden" />
-      </div>
-    );
-  }
+  if (!id) return <Navigate to="/cotizaciones/nueva" replace />;
 
   return (
     <form onSubmit={save}>
       <PageHeader
-        title={number || 'Nueva orden de trabajo'}
-        subtitle="Al guardar productos se descuenta el inventario automáticamente"
+        title={number || 'Orden de trabajo'}
+        subtitle="La orden nació del cobro en caja. Aquí se actualiza el equipo, el técnico y el estado."
         actions={
           <>
-            {id && <Link className="btn-ghost" to={`/ordenes/${id}/imprimir`}>Imprimir comprobante</Link>}
+            <Link className="btn-ghost" to={`/ordenes/${id}/imprimir`}>Imprimir comprobante</Link>
             {can('orders.manage') && <button className="btn-primary">Guardar</button>}
           </>
         }

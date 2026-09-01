@@ -48,14 +48,14 @@ export default function Dashboard() {
     { label: 'Pendientes', value: k.pending ?? '—', to: '/ordenes' },
     { label: 'Entregas hoy', value: k.delivered ?? '—', to: '/ordenes' },
     { label: 'Stock bajo', value: k.low_stock ?? '—', to: '/inventario' },
-    { label: 'Ingresos USD', value: usd(k.income_usd), to: isAdmin ? '/finanzas' : '/caja' },
-    { label: 'Egresos USD', value: usd(k.expense_usd), to: isAdmin ? '/finanzas' : '/caja' },
   ];
   if (isAdmin) {
-    cards.push({ label: 'Gestión financiera', value: '40 / 30 / 20', to: '/finanzas' });
-  }
-  if (isAdmin) {
-    cards.push({ label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' });
+    cards.push(
+      { label: 'Ingresos USD', value: usd(k.income_usd), to: '/finanzas' },
+      { label: 'Egresos USD', value: usd(k.expense_usd), to: '/finanzas' },
+      { label: 'Gestión financiera', value: '40 / 30 / 20', to: '/finanzas' },
+      { label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' },
+    );
   }
   if (can('alerts.view') || can('dashboard.view')) {
     cards.push({ label: 'Alertas', value: alertTotal, to: '/alertas', alert: alertTotal > 0 });
@@ -91,13 +91,13 @@ export default function Dashboard() {
               </h2>
               {ratesOk ? (
                 <p className="mt-1 text-sm text-emerald-900">
-                  Tasas del día registradas. Ya puede abrir caja, cotizar y crear órdenes.
+                  Tasas del día registradas. Ya puede abrir caja y cotizar. La orden se crea al cobrar.
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-rose-900">
                   {isAdmin
-                    ? 'Aún no hay tasas del día. Actualícelas para abrir caja, realizar una cotización o una orden.'
-                    : 'Aún no hay tasas del día. El administrador debe actualizarlas para abrir caja, cotizar o crear una orden.'}
+                    ? 'Aún no hay tasas del día. Actualícelas para abrir caja y cotizar.'
+                    : 'Aún no hay tasas del día. El administrador debe actualizarlas para abrir caja y cotizar.'}
                 </p>
               )}
             </div>
