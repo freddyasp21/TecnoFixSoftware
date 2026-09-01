@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, downloadExcel, usd, statusMeta, ORDER_STATUS } from '../api';
+import RateGate from '../components/RateGate';
 import { Badge, ErrorBox, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -9,17 +10,24 @@ export default function Orders() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [q, setQ] = useState('');
-  const { data, error, reload } = useAsync(() => {
+  const { data, error, setError, reload } = useAsync(() => {
     const p = new URLSearchParams();
     if (status) p.set('status', status);
     if (q) p.set('q', q);
     return api(`/orders?${p}`);
   }, [status, q]);
+  const ratesQ = useAsync(() => api('/rates/today').catch(() => null));
+  const ratesMissing = !ratesQ.loading && !ratesQ.data;
 
   async function remove(id) {
-    if (!confirm('¿Eliminar la orden y devolver el stock?')) return;
-    await api(`/orders/${id}`, { method: 'DELETE' });
-    reload();
+    if (!confirm('¿Eliminar la orden y devolver el stock? El cobro en caja, si existiera, se conserva.')) return;
+    try {
+      await api(`/orders/${id}`, { method: 'DELETE' });
+      setError('');
+      reload();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
@@ -30,7 +38,8 @@ export default function Orders() {
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('ordenes')}>Exportar Excel</button>
-            {can('orders.manage') && <Link className="btn-primary" to="/ordenes/nueva">Nueva orden</Link>}
+            {can('orders.manage') && !ratesMissing && <Link className="btn-primary" to="/ordenes/nueva">Nueva orden</Link>}
+            {can('orders.manage') && ratesMissing && <Link className="btn-primary" to="/tasas">Actualizar tasa</Link>}
           </>
         }
       />
@@ -42,6 +51,7 @@ export default function Orders() {
         </select>
       </div>
       <ErrorBox error={error} />
+      {ratesMissing && <RateGate action="crear una orden" />}
       <div className="card table-wrap">
         <table className="data">
           <thead>
@@ -61,7 +71,9 @@ export default function Orders() {
                   <td>{usd(o.total)}</td>
                   <td className="space-x-2 text-right">
                     <Link className="btn-ghost" to={`/ordenes/${o.id}/imprimir`}>Imprimir</Link>
-                    {can('orders.delete') && <button className="btn-ghost" onClick={() => remove(o.id)}>Eliminar</button>}
+                    {can('orders.delete') && (
+                      <button type="button" className="btn-ghost" onClick={() => remove(o.id)}>Eliminar</button>
+                    )}
                   </td>
                 </tr>
               );

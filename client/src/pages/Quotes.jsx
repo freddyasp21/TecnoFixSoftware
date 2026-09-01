@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { api, downloadExcel, usd } from '../api';
+import RateGate from '../components/RateGate';
 import { PageHeader, useAsync, ErrorBox } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -14,6 +15,8 @@ export default function Quotes() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const { data, error, reload } = useAsync(() => api('/quotes'));
+  const ratesQ = useAsync(() => api('/rates/today').catch(() => null));
+  const ratesMissing = !ratesQ.loading && !ratesQ.data;
 
   async function remove(id) {
     if (!confirm('¿Eliminar esta cotización?')) return;
@@ -38,11 +41,13 @@ export default function Quotes() {
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('cotizaciones')}>Exportar Excel</button>
-            {can('quotes.manage') && <Link className="btn-primary" to="/cotizaciones/nueva">Nueva cotización</Link>}
+            {can('quotes.manage') && !ratesMissing && <Link className="btn-primary" to="/cotizaciones/nueva">Nueva cotización</Link>}
+            {can('quotes.manage') && ratesMissing && <Link className="btn-primary" to="/tasas">Actualizar tasa</Link>}
           </>
         }
       />
       <ErrorBox error={error} />
+      {ratesMissing && <RateGate action="crear una cotización" />}
       <div className="card table-wrap">
         <table className="data">
           <thead>

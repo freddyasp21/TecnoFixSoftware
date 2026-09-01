@@ -94,3 +94,33 @@ export function statusMeta(id) {
 export function rateLabel(type) {
   return { bcv: 'BCV', euro: 'Dólar €', usdt: 'USDT' }[type] || type;
 }
+
+export function localDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/** IVA incluido: el total USD es la suma de ítems; el IVA se descuenta de ese equivalente. */
+export function computeTotals(items, ivaEnabled, ivaRate) {
+  const gross = round2((items || []).reduce((s, it) => {
+    const qty = Number(it.qty) || 0;
+    const price = Number(it.unit_price) || 0;
+    const line = it.line_total != null && it.line_total !== ''
+      ? Number(it.line_total)
+      : qty * price;
+    return s + (Number.isFinite(line) ? line : 0);
+  }, 0));
+  if (!ivaEnabled) {
+    return { subtotal: gross, iva: 0, iva_amount: 0, total: gross };
+  }
+  const rate = Number(ivaRate) || 16;
+  const iva_amount = round2(gross * rate / (100 + rate));
+  const subtotal = round2(gross - iva_amount);
+  return { subtotal, iva: iva_amount, iva_amount, total: gross };
+}

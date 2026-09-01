@@ -258,6 +258,9 @@ const MODULES = {
 };
 
 router.get('/:module', async (req, res) => {
+  if (['finanzas', 'trabajadores', 'nomina'].includes(req.params.module) && req.user.role !== 'Administrador') {
+    return res.status(403).json({ error: 'Solo el administrador puede exportar este módulo' });
+  }
   const factory = MODULES[req.params.module];
   if (!factory) return res.status(404).json({ error: 'Módulo de exportación no válido' });
   const { sheet, columns, rows } = factory();

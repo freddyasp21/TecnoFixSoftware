@@ -1,5 +1,5 @@
 /**
- * Centro de alertas: agrega stock bajo, nómina pendiente, piezas en espera y órdenes listas.
+ * Centro de alertas: agrega stock bajo, cobros pendientes, nómina, piezas en espera y órdenes listas.
  */
 const express = require('express');
 const { getDb } = require('../db/database');

@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
-const { getSetting, nextNumber, computeTotals, todayRate } = require('../utils/helpers');
+const { getSetting, nextNumber, computeTotals, todayRateOr409 } = require('../utils/helpers');
 const { deductProducts, restoreProducts } = require('../services/inventory');
 
 const router = express.Router();
@@ -89,9 +89,10 @@ function saveItems(db, orderId, items, ivaEnabled, ivaRate, userId, previousItem
 router.post('/', requirePermission('orders.manage'), (req, res) => {
   const b = req.body || {};
   const db = getDb();
-  const rate = todayRate(db);
+  const rate = todayRateOr409(db, res);
+  if (!rate) return;
   const rateType = b.rate_type || 'bcv';
-  const rateValue = Number(b.rate_value) || (rate ? rate[rateType] : 1);
+  const rateValue = Number(b.rate_value) || rate[rateType];
   const ivaEnabled = b.iva_enabled != null ? (b.iva_enabled ? 1 : 0) : (getSetting(db, 'iva_enabled') === '1' ? 1 : 0);
   const ivaRate = Number(b.iva_rate) || Number(getSetting(db, 'iva_rate', '16'));
 
@@ -178,11 +179,17 @@ router.delete('/:id', requirePermission('orders.delete'), (req, res) => {
   const db = getDb();
   const order = hydrate(db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id));
   if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
-  db.transaction(() => {
-    restoreProducts(order.items, `Eliminación ${order.number}`, 'work_order', order.id, req.user.id);
-    db.prepare('DELETE FROM work_orders WHERE id = ?').run(order.id);
-  })();
-  res.json({ ok: true });
+  try {
+    db.transaction(() => {
+      restoreProducts(order.items, `Eliminación ${order.number}`, 'work_order', order.id, req.user.id);
+      db.prepare('UPDATE cash_transactions SET work_order_id = NULL WHERE work_order_id = ?').run(order.id);
+      db.prepare('DELETE FROM work_order_items WHERE work_order_id = ?').run(order.id);
+      db.prepare('DELETE FROM work_orders WHERE id = ?').run(order.id);
+    })();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'No se pudo eliminar la orden' });
+  }
 });
 
 module.exports = router;

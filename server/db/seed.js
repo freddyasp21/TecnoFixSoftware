@@ -40,15 +40,15 @@ const ROLE_PERMS = {
     'dashboard.view', 'rates.view', 'catalog.view', 'catalog.manage',
     'quotes.view', 'orders.view', 'orders.manage',
     'calendar.view', 'calendar.manage', 'inventory.view',
-    'clients.view', 'clients.manage', 'workers.view', 'alerts.view',
+    'clients.view', 'clients.manage', 'alerts.view',
   ],
   Cajero: [
-    'dashboard.view', 'rates.view', 'rates.manage',
+    'dashboard.view', 'rates.view',
     'catalog.view', 'quotes.view', 'quotes.manage',
     'orders.view', 'orders.manage', 'calendar.view', 'inventory.view',
     'clients.view', 'clients.manage',
-    'cash.view', 'cash.manage', 'finance.view', 'finance.manage',
-    'workers.view', 'workers.manage', 'alerts.view', 'reports.view',
+    'cash.view', 'cash.manage',
+    'alerts.view', 'reports.view',
   ],
 };
 

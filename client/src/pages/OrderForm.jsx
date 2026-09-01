@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, usd, bs, ORDER_STATUS } from '../api';
+import { api, usd, bs, ORDER_STATUS, computeTotals } from '../api';
 import LineItems from '../components/LineItems';
+import RateGate from '../components/RateGate';
 import { ErrorBox, Field, PageHeader, Switch } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -12,6 +13,7 @@ export default function OrderForm() {
   const [clients, setClients] = useState([]);
   const [techs, setTechs] = useState([]);
   const [rates, setRates] = useState(null);
+  const [ratesReady, setRatesReady] = useState(false);
   const [error, setError] = useState('');
   const [number, setNumber] = useState('');
   const [form, setForm] = useState({
@@ -30,7 +32,7 @@ export default function OrderForm() {
     api('/rates/today').then((r) => {
       setRates(r);
       if (r && !id) setForm((f) => ({ ...f, rate_value: r[f.rate_type] || 1 }));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setRatesReady(true));
     if (id) {
       api(`/orders/${id}`).then((o) => {
         setNumber(o.number);
@@ -50,11 +52,10 @@ export default function OrderForm() {
     if (rates && !id) setForm((f) => ({ ...f, rate_value: rates[f.rate_type] || f.rate_value }));
   }, [form.rate_type, rates]);
 
-  const totals = useMemo(() => {
-    const subtotal = form.items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
-    const iva = form.iva_enabled ? subtotal * (Number(form.iva_rate) || 16) / 100 : 0;
-    return { subtotal, iva, total: subtotal + iva };
-  }, [form.items, form.iva_enabled, form.iva_rate]);
+  const totals = useMemo(
+    () => computeTotals(form.items, form.iva_enabled, form.iva_rate),
+    [form.items, form.iva_enabled, form.iva_rate],
+  );
 
   async function save(e) {
     e.preventDefault();
@@ -66,6 +67,16 @@ export default function OrderForm() {
         : await api('/orders', { method: 'POST', body });
       navigate(`/ordenes/${saved.id}`);
     } catch (err) { setError(err.message); }
+  }
+
+  const blockedNew = !id && ratesReady && !rates;
+  if (blockedNew) {
+    return (
+      <div>
+        <PageHeader title="Nueva orden de trabajo" subtitle="Al guardar productos se descuenta el inventario automáticamente" />
+        <RateGate action="crear una orden" />
+      </div>
+    );
   }
 
   return (
@@ -119,10 +130,16 @@ export default function OrderForm() {
             </select>
           </Field>
           <Field label="Valor de la tasa (Bs)"><input type="number" step="0.01" value={form.rate_value} onChange={(e) => setForm({ ...form, rate_value: e.target.value })} /></Field>
-          <Switch checked={form.iva_enabled} onChange={(v) => setForm({ ...form, iva_enabled: v })} label={`IVA ${form.iva_rate}%`} />
+          <Switch
+            checked={form.iva_enabled}
+            onChange={(v) => setForm({ ...form, iva_enabled: v })}
+            label={`IVA ${form.iva_rate}% ${form.iva_enabled ? 'incluido en el total' : 'desactivado'}`}
+          />
           <div className="rounded-xl bg-slate-50 p-4 text-sm">
-            <div className="flex justify-between"><span>Subtotal</span><b>{usd(totals.subtotal)}</b></div>
-            <div className="flex justify-between"><span>IVA</span><b>{usd(totals.iva)}</b></div>
+            <div className="flex justify-between"><span>{form.iva_enabled ? 'Base (sin IVA)' : 'Subtotal'}</span><b>{usd(totals.subtotal)}</b></div>
+            {form.iva_enabled && (
+              <div className="flex justify-between"><span>IVA {form.iva_rate}% incluido</span><b>{usd(totals.iva)}</b></div>
+            )}
             <div className="mt-2 flex justify-between text-base"><span>Total USD</span><b>{usd(totals.total)}</b></div>
             <div className="flex justify-between text-slate-500"><span>Total Bs</span><span>{bs(totals.total * Number(form.rate_value || 0))}</span></div>
           </div>

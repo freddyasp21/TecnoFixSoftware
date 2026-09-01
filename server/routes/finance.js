@@ -4,11 +4,11 @@
  */
 const express = require('express');
 const { getDb } = require('../db/database');
-const { authRequired, requirePermission } = require('../middleware/auth');
+const { authRequired, requireAdmin } = require('../middleware/auth');
 const { getSetting, setSetting, round2 } = require('../utils/helpers');
 
 const router = express.Router();
-router.use(authRequired);
+router.use(authRequired, requireAdmin);
 
 const BUCKETS = [
   { id: 'payroll', key: 'finance_pct_payroll', label: 'Trabajadores', hint: 'Pago al personal de la empresa' },
@@ -24,17 +24,7 @@ function rules(db) {
   return { payroll, supplies, savings, operation };
 }
 
-function requireAny(...codes) {
-  return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'Sesión requerida' });
-    if (req.user.role === 'Administrador' || codes.some((c) => req.user.permissions.includes(c))) {
-      return next();
-    }
-    return res.status(403).json({ error: 'No tiene permiso para esta acción' });
-  };
-}
-
-router.get('/', requireAny('finance.view', 'cash.view'), (req, res) => {
+router.get('/', (req, res) => {
   const db = getDb();
   const from = req.query.from || new Date().toISOString().slice(0, 8) + '01';
   const to = req.query.to || new Date().toISOString().slice(0, 10);
@@ -119,7 +109,7 @@ router.get('/', requireAny('finance.view', 'cash.view'), (req, res) => {
   });
 });
 
-router.put('/rules', requirePermission('finance.manage'), (req, res) => {
+router.put('/rules', (req, res) => {
   const payroll = Number(req.body.payroll);
   const supplies = Number(req.body.supplies);
   const savings = Number(req.body.savings);
@@ -136,7 +126,7 @@ router.put('/rules', requirePermission('finance.manage'), (req, res) => {
   res.json({ ok: true, rules: rules(db) });
 });
 
-router.put('/transactions/:id', requirePermission('finance.manage'), (req, res) => {
+router.put('/transactions/:id', (req, res) => {
   const allowed = ['payroll', 'supplies', 'savings', 'operation', null, ''];
   let bucket = req.body.finance_bucket;
   if (bucket === '') bucket = null;

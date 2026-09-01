@@ -4,7 +4,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../db/database');
-const { authRequired, requirePermission } = require('../middleware/auth');
+const { authRequired, requirePermission, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(authRequired, requirePermission('users.manage'));
@@ -93,6 +93,51 @@ router.post('/:id/reset-password', (req, res) => {
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
   db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
     .run(bcrypt.hashSync(new_password, 10), user.id);
+  res.json({ ok: true });
+});
+
+router.delete('/:id', requireAdmin, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'No puede eliminar su propia cuenta' });
+  }
+  const target = db.prepare(`
+    SELECT u.id, u.username, r.name AS role
+    FROM users u JOIN roles r ON r.id = u.role_id
+    WHERE u.id = ?
+  `).get(id);
+  if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+  if (target.role === 'Administrador') {
+    const remaining = db.prepare(`
+      SELECT COUNT(*) AS n
+      FROM users u JOIN roles r ON r.id = u.role_id
+      WHERE r.name = 'Administrador' AND u.id != ?
+    `).get(id).n;
+    if (remaining < 1) {
+      return res.status(400).json({ error: 'No se puede eliminar el último administrador' });
+    }
+  }
+
+  try {
+    db.transaction(() => {
+      db.prepare('UPDATE exchange_rates SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE quotes SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE work_orders SET technician_id = NULL WHERE technician_id = ?').run(id);
+      db.prepare('UPDATE work_orders SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE inventory_movements SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE cash_sessions SET opened_by = NULL WHERE opened_by = ?').run(id);
+      db.prepare('UPDATE cash_sessions SET closed_by = NULL WHERE closed_by = ?').run(id);
+      db.prepare('UPDATE cash_transactions SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE sales SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE workers SET user_id = NULL WHERE user_id = ?').run(id);
+      db.prepare('UPDATE payroll_payments SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    })();
+  } catch (err) {
+    return res.status(400).json({ error: 'No se pudo eliminar el usuario porque tiene registros vinculados' });
+  }
   res.json({ ok: true });
 });
 

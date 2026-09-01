@@ -29,6 +29,14 @@ function linkAllRoles(db, code) {
   `).run(code);
 }
 
+function unlinkRoles(db, code, names) {
+  db.prepare(`
+    DELETE FROM role_permissions
+    WHERE permission_id = (SELECT id FROM permissions WHERE code = ?)
+      AND role_id IN (SELECT id FROM roles WHERE name IN (${names.map(() => '?').join(',')}))
+  `).run(code, ...names);
+}
+
 function linkRoles(db, code, names) {
   db.prepare(`
     INSERT INTO role_permissions (role_id, permission_id)
@@ -96,11 +104,17 @@ function migrate(db) {
   addPermission(db, 'workers.manage', 'trabajadores', 'Editar plantilla, asistencia y pagar nómina');
   addPermission(db, 'alerts.view', 'alertas', 'Ver alertas operativas del taller');
 
-  linkAllRoles(db, 'finance.view');
-  linkAllRoles(db, 'workers.view');
   linkAllRoles(db, 'alerts.view');
-  linkRoles(db, 'finance.manage', ['Administrador', 'Cajero']);
-  linkRoles(db, 'workers.manage', ['Administrador', 'Cajero']);
+  linkAllRoles(db, 'rates.view');
+  linkRoles(db, 'finance.view', ['Administrador']);
+  linkRoles(db, 'finance.manage', ['Administrador']);
+  linkRoles(db, 'workers.view', ['Administrador']);
+  linkRoles(db, 'workers.manage', ['Administrador']);
+  unlinkRoles(db, 'rates.manage', ['Tecnico', 'Cajero']);
+  unlinkRoles(db, 'finance.view', ['Tecnico', 'Cajero']);
+  unlinkRoles(db, 'finance.manage', ['Tecnico', 'Cajero']);
+  unlinkRoles(db, 'workers.view', ['Tecnico', 'Cajero']);
+  unlinkRoles(db, 'workers.manage', ['Tecnico', 'Cajero']);
 
   const has = db.prepare('SELECT 1 FROM settings WHERE key = ?');
   if (!has.get('finance_pct_payroll')) setSetting(db, 'finance_pct_payroll', '40');

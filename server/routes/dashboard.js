@@ -23,7 +23,16 @@ router.get('/', (_req, res) => {
     WHERE date(received_at) = date(?) GROUP BY status
   `).all(today);
 
-  res.json({ kpis, orders });
+  const pendingCollect = db.prepare(`
+    SELECT q.id, q.number, q.total, q.updated_at, q.created_at,
+           c.name AS client_name, c.phone AS client_phone
+    FROM quotes q
+    LEFT JOIN clients c ON c.id = q.client_id
+    WHERE q.status = 'aprobada'
+    ORDER BY q.updated_at DESC
+  `).all();
+
+  res.json({ kpis, orders, pendingCollect });
 });
 
 module.exports = router;

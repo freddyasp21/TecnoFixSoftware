@@ -21,7 +21,7 @@ function today() {
 }
 
 export default function Finance() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [rulesForm, setRulesForm] = useState({ payroll: 40, supplies: 30, savings: 20 });
@@ -78,7 +78,7 @@ export default function Finance() {
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('finanzas')}>Exportar Excel</button>
             {can('cash.view') && <Link className="btn-ghost" to="/caja">Ir a caja</Link>}
-            {(can('workers.view') || can('cash.view')) && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
+            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
           </>
         }
       />

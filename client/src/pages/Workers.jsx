@@ -17,7 +17,7 @@ function weekday(iso) {
 }
 
 export default function Workers() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -110,7 +110,7 @@ export default function Workers() {
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('trabajadores')}>Exportar plantilla</button>
             <button className="btn-ghost" onClick={() => downloadExcel('nomina')}>Exportar nómina</button>
-            {can('finance.view') && <Link className="btn-ghost" to="/finanzas">Finanzas</Link>}
+            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/finanzas">Finanzas</Link>}
             {can('cash.view') && <Link className="btn-ghost" to="/caja">Caja</Link>}
             {can('workers.manage') && (
               <button className="btn-primary" onClick={() => { setForm({ ...empty }); setMsg(''); }}>Nuevo trabajador</button>

@@ -79,7 +79,7 @@ export default function Settings() {
               onChange={(v) => setForm({ ...form, iva_enabled: v })}
               label="Aplicar IVA 16% en cotizaciones y cobros"
             />
-            <p className="mt-2 text-xs text-slate-500">Al activarlo, las nuevas cotizaciones, órdenes y ventas calculan IVA sobre el subtotal en USD.</p>
+            <p className="mt-2 text-xs text-slate-500">Al activarlo, el IVA se descuenta del precio en USD (queda incluido). El total a cobrar no aumenta. Si está apagado, el monto de los ítems se cobra completo, sin IVA.</p>
           </div>
           <h2 className="pt-2 font-semibold">GitHub Releases</h2>
           <Field label="Owner"><input value={form.github_owner} onChange={(e) => setForm({ ...form, github_owner: e.target.value })} /></Field>

@@ -3,23 +3,13 @@
  */
 const express = require('express');
 const { getDb } = require('../db/database');
-const { authRequired, requirePermission } = require('../middleware/auth');
+const { authRequired, requireAdmin } = require('../middleware/auth');
 const { todayRate, amountToUsd, round2 } = require('../utils/helpers');
 const { quincena, buildPayroll } = require('../utils/payroll');
 
 const METHODS = ['usd_cash', 'bs_cash', 'bs_mobile', 'usdt'];
 const router = express.Router();
-router.use(authRequired);
-
-function requireAny(...codes) {
-  return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'Sesión requerida' });
-    if (req.user.role === 'Administrador' || codes.some((c) => req.user.permissions.includes(c))) {
-      return next();
-    }
-    return res.status(403).json({ error: 'No tiene permiso para esta acción' });
-  };
-}
+router.use(authRequired, requireAdmin);
 
 function currentSession(db) {
   return db.prepare(`
@@ -27,7 +17,7 @@ function currentSession(db) {
   `).get();
 }
 
-router.get('/', requireAny('workers.view', 'cash.view'), (_req, res) => {
+router.get('/', (_req, res) => {
   const rows = getDb().prepare(`
     SELECT w.*, u.full_name AS user_name
     FROM workers w
@@ -37,7 +27,7 @@ router.get('/', requireAny('workers.view', 'cash.view'), (_req, res) => {
   res.json(rows);
 });
 
-router.post('/', requirePermission('workers.manage'), (req, res) => {
+router.post('/', (req, res) => {
   const b = req.body || {};
   if (!String(b.full_name || '').trim()) {
     return res.status(400).json({ error: 'El nombre del trabajador es obligatorio' });
@@ -62,7 +52,7 @@ router.post('/', requirePermission('workers.manage'), (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
-router.put('/:id', requirePermission('workers.manage'), (req, res) => {
+router.put('/:id', (req, res) => {
   const db = getDb();
   const row = db.prepare('SELECT * FROM workers WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Trabajador no encontrado' });
@@ -91,7 +81,7 @@ router.put('/:id', requirePermission('workers.manage'), (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/payroll', requireAny('workers.view', 'cash.view'), (req, res) => {
+router.get('/payroll', (req, res) => {
   const now = new Date();
   const year = req.query.year || now.getFullYear();
   const month = req.query.month || (now.getMonth() + 1);
@@ -106,7 +96,7 @@ router.get('/payroll', requireAny('workers.view', 'cash.view'), (req, res) => {
   }
 });
 
-router.post('/:id/attendance', requirePermission('workers.manage'), (req, res) => {
+router.post('/:id/attendance', (req, res) => {
   const db = getDb();
   const worker = db.prepare('SELECT id FROM workers WHERE id = ?').get(req.params.id);
   if (!worker) return res.status(404).json({ error: 'Trabajador no encontrado' });
@@ -123,11 +113,8 @@ router.post('/:id/attendance', requirePermission('workers.manage'), (req, res) =
   res.json({ ok: true });
 });
 
-router.post('/:id/pay', requirePermission('cash.manage'), (req, res) => {
+router.post('/:id/pay', (req, res) => {
   const db = getDb();
-  if (req.user.role !== 'Administrador' && !req.user.permissions.includes('workers.manage')) {
-    return res.status(403).json({ error: 'No tiene permiso para pagar nómina' });
-  }
   const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(req.params.id);
   if (!worker || !worker.active) {
     return res.status(404).json({ error: 'Trabajador no encontrado o inactivo' });

@@ -35,6 +35,12 @@ function Guard({ children }) {
   return children;
 }
 
+function AdminOnly({ children }) {
+  const { user } = useAuth();
+  if (user?.role !== 'Administrador') return <Navigate to="/" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -57,8 +63,8 @@ export default function App() {
         <Route path="clientes" element={<Clients />} />
         <Route path="clientes/:id" element={<ClientDetail />} />
         <Route path="caja" element={<Cash />} />
-        <Route path="finanzas" element={<Finance />} />
-        <Route path="trabajadores" element={<Workers />} />
+        <Route path="finanzas" element={<AdminOnly><Finance /></AdminOnly>} />
+        <Route path="trabajadores" element={<AdminOnly><Workers /></AdminOnly>} />
         <Route path="reportes" element={<Reports />} />
         <Route path="configuracion" element={<Settings />} />
       </Route>

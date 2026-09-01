@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, downloadExcel, usd, bs, PAYMENT_METHODS, FINANCE_BUCKETS } from '../api';
 import LineItems from '../components/LineItems';
+import RateGate from '../components/RateGate';
 import { ErrorBox, Field, Modal, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function Cash() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const navigate = useNavigate();
   const { data, error, reload } = useAsync(() => api('/cash/current'));
   const [openForm, setOpenForm] = useState(null);
@@ -16,7 +17,8 @@ export default function Cash() {
   const [collect, setCollect] = useState(null);
   const [techs, setTechs] = useState([]);
   const [msg, setMsg] = useState('');
-  const rates = useAsync(() => api('/rates/today'));
+  const rates = useAsync(() => api('/rates/today').catch(() => null));
+  const ratesMissing = !rates.loading && !rates.data;
 
   const session = data?.session;
   const bd = data?.breakdown;
@@ -121,12 +123,13 @@ export default function Cash() {
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('caja')}>Exportar Excel</button>
-            <Link className="btn-ghost" to="/finanzas">Finanzas</Link>
-            <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>
-            {can('cash.manage') && !session && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
+            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/finanzas">Finanzas</Link>}
+            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
+            {can('cash.manage') && !session && !ratesMissing && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
+            {can('cash.manage') && !session && ratesMissing && <Link className="btn-primary" to="/tasas">Actualizar tasa</Link>}
             {can('cash.manage') && session && (
               <>
-                <button className="btn-ghost" onClick={() => setSale({ items: [], payment_method: 'usd_cash', rate_type: 'bcv', amount: '' })}>Venta directa</button>
+                <button className="btn-ghost" onClick={() => setSale({ items: [], payment_method: 'usd_cash', rate_type: 'bcv', amount: '' })} disabled={ratesMissing}>Venta directa</button>
                 <button className="btn-amber" onClick={() => setCloseF({ close_usd: 0, close_bs: 0, close_usdt: 0, notes: '' })}>Cerrar caja</button>
               </>
             )}
@@ -134,6 +137,7 @@ export default function Cash() {
         }
       />
       <ErrorBox error={error || msg} />
+      {ratesMissing && <RateGate action="abrir caja" />}
 
       {(data?.pendingQuotes || []).length > 0 && (
         <div className="card mb-6 table-wrap">
@@ -153,7 +157,7 @@ export default function Cash() {
                   <td>{usd(q.total)}</td>
                   <td className="text-right">
                     {can('cash.manage') && (
-                      <button className="btn-amber" onClick={() => openCollect(q)}>Cobrar</button>
+                      <button className="btn-amber" onClick={() => openCollect(q)} disabled={ratesMissing}>Cobrar</button>
                     )}
                   </td>
                 </tr>
@@ -315,7 +319,7 @@ export default function Cash() {
           <form className="space-y-3" onSubmit={doCollect}>
             <p className="text-sm text-slate-600">
               Cliente: <b>{collect.quote.client_name || '—'}</b> · Total {usd(collect.quote.total)}
-              {collect.quote.iva_enabled ? ` (IVA ${collect.quote.iva_rate}%)` : ''}
+              {collect.quote.iva_enabled ? ` (IVA ${collect.quote.iva_rate}% incluido)` : ''}
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Método de pago">

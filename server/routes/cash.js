@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
-const { getSetting, nextNumber, computeTotals, todayRate, amountToUsd } = require('../utils/helpers');
+const { getSetting, nextNumber, computeTotals, todayRateOr409, amountToUsd } = require('../utils/helpers');
 const { convertQuoteToOrder } = require('../services/quoteToOrder');
 
 const METHODS = ['usd_cash', 'bs_cash', 'bs_mobile', 'usdt'];
@@ -72,6 +72,7 @@ router.get('/sessions', requirePermission('cash.view'), (_req, res) => {
 
 router.post('/open', requirePermission('cash.manage'), (req, res) => {
   const db = getDb();
+  if (!todayRateOr409(db, res)) return;
   if (currentSession(db)) {
     return res.status(400).json({ error: 'Ya existe una caja abierta' });
   }
@@ -116,9 +117,10 @@ router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
   if (b.type === 'expense' && b.finance_bucket && !FINANCE_BUCKETS.includes(b.finance_bucket)) {
     return res.status(400).json({ error: 'Clasificación financiera no válida' });
   }
-  const rate = todayRate(db);
+  const rate = todayRateOr409(db, res);
+  if (!rate) return;
   const rateType = b.rate_type || 'bcv';
-  const rateValue = Number(b.rate_value) || (rate ? rate[rateType] : 1);
+  const rateValue = Number(b.rate_value) || rate[rateType];
   const amountUsd = amountToUsd(b.amount, b.payment_method, rateType, rateValue);
   const bucket = b.type === 'expense' ? (b.finance_bucket || null) : null;
   const info = db.prepare(`
@@ -145,9 +147,10 @@ router.post('/sale', requirePermission('cash.manage'), (req, res) => {
   }
   const ivaEnabled = getSetting(db, 'iva_enabled') === '1';
   const ivaRate = Number(getSetting(db, 'iva_rate', '16'));
-  const rate = todayRate(db);
+  const rate = todayRateOr409(db, res);
+  if (!rate) return;
   const rateType = b.rate_type || 'bcv';
-  const rateValue = Number(b.rate_value) || (rate ? rate[rateType] : 1);
+  const rateValue = Number(b.rate_value) || rate[rateType];
 
   try {
     const result = db.transaction(() => {
@@ -201,9 +204,10 @@ router.post('/collect-quote', requirePermission('cash.manage'), (req, res) => {
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
   quote.items = db.prepare('SELECT * FROM quote_items WHERE quote_id = ?').all(quote.id);
 
-  const rate = todayRate(db);
+  const rate = todayRateOr409(db, res);
+  if (!rate) return;
   const rateType = b.rate_type || quote.rate_type || 'bcv';
-  const rateValue = Number(b.rate_value) || (rate ? rate[rateType] : quote.rate_value) || 1;
+  const rateValue = Number(b.rate_value) || rate[rateType] || quote.rate_value;
   const payAmount = (b.amount !== undefined && b.amount !== null && b.amount !== '')
     ? Number(b.amount)
     : (b.payment_method.startsWith('bs') ? quote.total * rateValue : quote.total);

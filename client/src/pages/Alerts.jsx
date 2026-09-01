@@ -6,6 +6,7 @@ import { useAuth } from '../auth';
 
 const TABS = [
   { id: 'all', label: 'Todas' },
+  { id: 'collect', label: 'Cobros pendientes' },
   { id: 'stock', label: 'Stock bajo' },
   { id: 'payroll', label: 'Pagos de nómina' },
   { id: 'parts', label: 'Piezas pedidas' },
@@ -17,12 +18,13 @@ function itemsForOrder(items, orderId) {
 }
 
 export default function Alerts() {
-  const { can } = useAuth();
-  const { data, error, reload } = useAsync(() => api('/alerts'));
+  const { can, user } = useAuth();
+  const { data, error, reload, loading } = useAsync(() => api('/alerts'));
   const [tab, setTab] = useState('all');
-  const c = data?.counts || { stock: 0, payroll: 0, parts: 0, ready: 0, total: 0 };
+  const c = data?.counts || { stock: 0, payroll: 0, collect: 0, parts: 0, ready: 0, total: 0 };
 
   const show = useMemo(() => ({
+    collect: tab === 'all' || tab === 'collect',
     stock: tab === 'all' || tab === 'stock',
     payroll: tab === 'all' || tab === 'payroll',
     parts: tab === 'all' || tab === 'parts',
@@ -33,12 +35,17 @@ export default function Alerts() {
     <div>
       <PageHeader
         title="Alertas"
-        subtitle="Pendientes reales de inventario, nómina y órdenes. No se duplican datos: se leen de cada módulo."
+        subtitle="Pendientes reales: cobros, inventario, nómina y órdenes. Al cobrar o resolver, la alerta desaparece."
         actions={<button className="btn-ghost" onClick={reload}>Actualizar</button>}
       />
       <ErrorBox error={error} />
+      {loading && !data && <p className="mb-4 text-sm text-slate-500">Cargando alertas…</p>}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <button type="button" className="card p-4 text-left hover:border-amber-200" onClick={() => setTab('collect')}>
+          <div className="text-xs font-semibold uppercase text-slate-500">Cobros pendientes</div>
+          <div className="mt-1 text-2xl font-bold text-amber-700">{c.collect}</div>
+        </button>
         <button type="button" className="card p-4 text-left hover:border-amber-200" onClick={() => setTab('stock')}>
           <div className="text-xs font-semibold uppercase text-slate-500">Stock bajo</div>
           <div className="mt-1 text-2xl font-bold text-amber-700">{c.stock}</div>
@@ -68,7 +75,48 @@ export default function Alerts() {
 
       {c.total === 0 && !error && (
         <div className="card p-8 text-center text-sm text-slate-500">
-          No hay alertas ahora. El inventario, la nómina y las órdenes están al día.
+          No hay alertas ahora. Los cobros, el inventario, la nómina y las órdenes están al día.
+        </div>
+      )}
+
+      {show.collect && (can('quotes.view') || can('cash.view')) && (tab === 'collect' || (data?.collect || []).length > 0) && (
+        <div className="card mb-6 table-wrap">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <h2 className="font-semibold text-ink-900">Cotizaciones aprobadas pendientes de cobro</h2>
+              <p className="text-xs text-slate-500">Al cobrarlas en caja se crea la orden y esta alerta desaparece.</p>
+            </div>
+            {can('cash.view')
+              ? <Link className="btn-amber" to="/caja">Ir a caja</Link>
+              : <Link className="btn-ghost" to="/cotizaciones">Ver cotizaciones</Link>}
+          </div>
+          {(data?.collect || []).length === 0 ? (
+            <p className="px-4 py-6 text-sm text-slate-500">No hay cobros pendientes.</p>
+          ) : (
+            <table className="data">
+              <thead>
+                <tr><th>Número</th><th>Cliente</th><th>Teléfono</th><th>Total USD</th><th>Actualizada</th><th></th></tr>
+              </thead>
+              <tbody>
+                {data.collect.map((q) => (
+                  <tr key={q.id} className="bg-amber-50/70">
+                    <td className="font-semibold">
+                      <Link className="text-brand-600" to={`/cotizaciones/${q.id}`}>{q.number}</Link>
+                    </td>
+                    <td>{q.client_name || '—'}</td>
+                    <td>{q.phone || q.client_phone || '—'}</td>
+                    <td className="font-semibold text-amber-900">{usd(q.total)}</td>
+                    <td className="whitespace-nowrap">{(q.updated_at || q.created_at || '').slice(0, 16)}</td>
+                    <td className="text-right">
+                      {can('cash.view')
+                        ? <Link className="btn-amber" to="/caja">Cobrar</Link>
+                        : <Link className="btn-ghost" to={`/cotizaciones/${q.id}`}>Ver</Link>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -102,7 +150,7 @@ export default function Alerts() {
         </div>
       )}
 
-      {show.payroll && (can('workers.view') || can('cash.view')) && (
+      {show.payroll && user?.role === 'Administrador' && (
         <div className="card mb-6 table-wrap">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>

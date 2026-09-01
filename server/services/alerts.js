@@ -1,5 +1,6 @@
 /**
- * Alertas operativas: solo lectura sobre inventario, nómina y órdenes existentes.
+ * Alertas operativas: cobros pendientes (cotizaciones aprobadas), inventario, nómina y órdenes.
+ * Tras cobrar en caja la cotización pasa a convertida y deja de aparecer.
  */
 const { quincena, buildPayroll } = require('../utils/payroll');
 
@@ -17,6 +18,7 @@ function collectAlerts(db, user) {
   const data = {
     stock: [],
     payroll: { period: null, remaining_usd: 0, workers: [] },
+    collect: [],
     parts_orders: [],
     parts_items: [],
     ready: [],
@@ -31,7 +33,7 @@ function collectAlerts(db, user) {
     `).all();
   }
 
-  if (userCan(user, 'workers.view') || userCan(user, 'cash.view')) {
+  if (user.role === 'Administrador') {
     const period = currentPeriod();
     const payroll = buildPayroll(db, period);
     const due = payroll.workers.filter((w) => w.remaining_usd > 0);
@@ -44,6 +46,17 @@ function collectAlerts(db, user) {
       remaining_usd: payroll.remaining_usd,
       workers: due,
     };
+  }
+
+  if (userCan(user, 'quotes.view') || userCan(user, 'cash.view')) {
+    data.collect = db.prepare(`
+      SELECT q.id, q.number, q.total, q.updated_at, q.created_at,
+             c.name AS client_name, c.phone AS client_phone
+      FROM quotes q
+      LEFT JOIN clients c ON c.id = q.client_id
+      WHERE q.status = 'aprobada'
+      ORDER BY q.updated_at DESC
+    `).all();
   }
 
   if (userCan(user, 'orders.view')) {
@@ -79,10 +92,11 @@ function collectAlerts(db, user) {
   const counts = {
     stock: data.stock.length,
     payroll: data.payroll.workers.length,
+    collect: data.collect.length,
     parts: data.parts_orders.length,
     ready: data.ready.length,
   };
-  counts.total = counts.stock + counts.payroll + counts.parts + counts.ready;
+  counts.total = counts.stock + counts.payroll + counts.collect + counts.parts + counts.ready;
   return { ...data, counts };
 }
 

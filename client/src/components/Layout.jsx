@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Wrench, CalendarDays, Boxes, Package,
   Users, HardHat, Wallet, Banknote, Bell, BadgeDollarSign, BarChart3, Settings, UserCog, LogOut,
@@ -16,10 +16,10 @@ const NAV = [
   { to: '/catalogo', label: 'Catálogo', icon: Package, perm: 'catalog.view' },
   { to: '/inventario', label: 'Inventario', icon: Boxes, perm: 'inventory.view' },
   { to: '/clientes', label: 'Clientes', icon: Users, perm: 'clients.view' },
-  { to: '/trabajadores', label: 'Trabajadores', icon: HardHat, anyOf: ['workers.view', 'cash.view'] },
+  { to: '/trabajadores', label: 'Trabajadores', icon: HardHat, admin: true },
   { to: '/caja', label: 'Caja', icon: Wallet, perm: 'cash.view' },
-  { to: '/finanzas', label: 'Finanzas', icon: Banknote, anyOf: ['finance.view', 'cash.view'] },
-  { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, perm: 'rates.view' },
+  { to: '/finanzas', label: 'Finanzas', icon: Banknote, admin: true },
+  { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, everyone: true },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
   { to: '/usuarios', label: 'Usuarios', icon: UserCog, perm: 'users.manage' },
   { to: '/configuracion', label: 'Ajustes', icon: Settings, perm: 'settings.manage' },
@@ -28,11 +28,17 @@ const NAV = [
 export default function Layout() {
   const { user, can, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const alertsQ = useAsync(async () => {
     try { return await api('/alerts/summary'); }
     catch { return { counts: { total: 0 } }; }
-  }, [user?.id]);
+  }, [user?.id, location.pathname]);
   const alertCount = Number(alertsQ.data?.counts?.total) || 0;
+  const ratesQ = useAsync(async () => {
+    try { return await api('/rates/today'); }
+    catch { return null; }
+  }, [user?.id]);
+  const ratesMissing = !ratesQ.loading && !ratesQ.data;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
@@ -45,7 +51,11 @@ export default function Layout() {
           </div>
         </div>
         <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-          {NAV.filter((item) => (item.anyOf ? item.anyOf.some((p) => can(p)) : can(item.perm))).map((item) => (
+          {NAV.filter((item) => {
+            if (item.admin) return user?.role === 'Administrador';
+            if (item.everyone) return true;
+            return item.anyOf ? item.anyOf.some((p) => can(p)) : can(item.perm);
+          }).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -62,6 +72,9 @@ export default function Layout() {
                 <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                   {alertCount > 99 ? '99+' : alertCount}
                 </span>
+              )}
+              {item.to === '/tasas' && ratesMissing && (
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" title="Tasa del día pendiente" />
               )}
             </NavLink>
           ))}

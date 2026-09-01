@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { api, rateLabel } from '../api';
+import { api, rateLabel, localDate } from '../api';
 import { ErrorBox, Field, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function Rates() {
-  const { can } = useAuth();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Administrador';
   const { data, error, reload } = useAsync(() => api('/rates'));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDate();
   const [form, setForm] = useState({ rate_date: today, bcv: '', euro: '', usdt: '' });
   const [msg, setMsg] = useState('');
 
@@ -23,7 +24,23 @@ export default function Rates() {
     <div>
       <PageHeader title="Tasas de cambio" subtitle="Registro diario en Bolívares: BCV, Dólar € y USDT Binance" />
       <ErrorBox error={error} />
-      {can('rates.manage') && (
+      {data && !data.today && (
+        <div className="mb-6 rounded-2xl border-2 border-rose-400 bg-rose-100 p-5">
+          <h2 className="font-semibold text-rose-950">Tasa del día pendiente</h2>
+          <p className="mt-1 text-sm text-rose-900">
+            Sin tasas de hoy no se puede abrir caja, cotizar ni crear una orden.
+          </p>
+        </div>
+      )}
+      {data?.today && (
+        <div className="mb-6 rounded-2xl border-2 border-emerald-400 bg-emerald-100 p-5">
+          <h2 className="font-semibold text-emerald-950">Tasa del día actualizada</h2>
+          <p className="mt-1 text-sm text-emerald-900">
+            BCV {Number(data.today.bcv).toLocaleString('es-VE')} · Euro {Number(data.today.euro).toLocaleString('es-VE')} · USDT {Number(data.today.usdt).toLocaleString('es-VE')}
+          </p>
+        </div>
+      )}
+      {isAdmin && (
         <form onSubmit={save} className="card mb-6 grid gap-3 p-5 md:grid-cols-5">
           <Field label="Fecha"><input type="date" value={form.rate_date} onChange={(e) => setForm({ ...form, rate_date: e.target.value })} /></Field>
           <Field label="BCV (Bs / USD)"><input type="number" step="0.01" value={form.bcv} onChange={(e) => setForm({ ...form, bcv: e.target.value })} required /></Field>

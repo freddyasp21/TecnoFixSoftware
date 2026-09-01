@@ -65,8 +65,10 @@ export default function OrderPrint() {
         </tbody>
       </table>
       <div className="ml-auto w-64 text-sm">
-        <div className="flex justify-between"><span>Subtotal</span><span>{usd(order.subtotal)}</span></div>
-        <div className="flex justify-between"><span>IVA</span><span>{usd(order.iva_amount)}</span></div>
+        <div className="flex justify-between"><span>{order.iva_enabled ? 'Base (sin IVA)' : 'Subtotal'}</span><span>{usd(order.subtotal)}</span></div>
+        {!!order.iva_enabled && (
+          <div className="flex justify-between"><span>IVA {order.iva_rate}% incluido</span><span>{usd(order.iva_amount)}</span></div>
+        )}
         <div className="flex justify-between font-bold"><span>Total USD</span><span>{usd(order.total)}</span></div>
         <div className="flex justify-between text-slate-500"><span>Total Bs ({order.rate_type})</span><span>{bs(order.total * order.rate_value)}</span></div>
       </div>

@@ -4,7 +4,7 @@ import { ErrorBox, Field, Modal, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function Users() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { data: users, error, reload } = useAsync(() => api('/users'));
   const rolesQ = useAsync(() => api('/users/roles'));
   const [modal, setModal] = useState(null);
@@ -14,6 +14,7 @@ export default function Users() {
 
   const roles = rolesQ.data?.roles || [];
   const permissions = rolesQ.data?.permissions || [];
+  const isAdmin = user?.role === 'Administrador';
 
   async function saveUser(e) {
     e.preventDefault();
@@ -28,6 +29,15 @@ export default function Users() {
   async function toggle(u) {
     await api(`/users/${u.id}`, { method: 'PUT', body: { active: u.active ? 0 : 1 } });
     reload();
+  }
+
+  async function removeUser(u) {
+    if (!confirm(`¿Eliminar al usuario ${u.username}? Esta acción no se puede deshacer.`)) return;
+    setMsg('');
+    try {
+      await api(`/users/${u.id}`, { method: 'DELETE' });
+      reload();
+    } catch (err) { setMsg(err.message); }
   }
 
   async function resetPassword(e) {
@@ -58,7 +68,7 @@ export default function Users() {
           </>
         }
       />
-      <ErrorBox error={error} />
+      <ErrorBox error={error || msg} />
       <div className="card table-wrap">
         <table className="data">
           <thead>
@@ -74,6 +84,9 @@ export default function Users() {
                 <td className="space-x-2 text-right">
                   <button className="btn-ghost" onClick={() => toggle(u)}>{u.active ? 'Desactivar' : 'Activar'}</button>
                   <button className="btn-ghost" onClick={() => setReset({ id: u.id, password: '' })}>Reset clave</button>
+                  {isAdmin && u.id !== user.id && (
+                    <button className="btn-danger" onClick={() => removeUser(u)}>Eliminar</button>
+                  )}
                 </td>
               </tr>
             ))}

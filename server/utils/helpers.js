@@ -24,19 +24,44 @@ function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-function computeTotals(items, ivaEnabled, ivaRate) {
-  const subtotal = round2(items.reduce((s, it) => s + Number(it.line_total || 0), 0));
-  const iva_amount = ivaEnabled ? round2(subtotal * (Number(ivaRate) || 16) / 100) : 0;
-  return { subtotal, iva_amount, total: round2(subtotal + iva_amount) };
+/** Fecha local YYYY-MM-DD (evita el desfase de toISOString en UTC). */
+function localDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
+const RATE_REQUIRED_MSG = 'Debe actualizar las tasas del día (BCV, Euro y USDT) antes de abrir caja, cotizar o crear una orden.';
+
+/** Tasa registrada hoy. Si no hay fila del día, null (no se reutiliza la de ayer). */
 function todayRate(db) {
-  const today = new Date().toISOString().slice(0, 10);
-  return db.prepare(`
-    SELECT * FROM exchange_rates
-    WHERE rate_date = ? OR rate_date <= ?
-    ORDER BY rate_date DESC LIMIT 1
-  `).get(today, today) || null;
+  return db.prepare('SELECT * FROM exchange_rates WHERE rate_date = ?').get(localDate()) || null;
+}
+
+function todayRateOr409(db, res) {
+  const rate = todayRate(db);
+  if (!rate) {
+    res.status(409).json({ error: RATE_REQUIRED_MSG });
+    return null;
+  }
+  return rate;
+}
+
+/**
+ * Totales en USD. El precio de los ítems es el equivalente a cobrar.
+ * Con IVA: el impuesto se extrae de ese monto (incluido); el total USD no aumenta.
+ * Sin IVA: subtotal = total = suma de ítems.
+ */
+function computeTotals(items, ivaEnabled, ivaRate) {
+  const gross = round2((items || []).reduce((s, it) => s + Number(it.line_total || 0), 0));
+  if (!ivaEnabled) {
+    return { subtotal: gross, iva_amount: 0, total: gross };
+  }
+  const rate = Number(ivaRate) || 16;
+  const iva_amount = round2(gross * rate / (100 + rate));
+  const subtotal = round2(gross - iva_amount);
+  return { subtotal, iva_amount, total: gross };
 }
 
 function amountToUsd(amount, method, rateType, rateValue) {
@@ -68,8 +93,11 @@ module.exports = {
   setSetting,
   nextNumber,
   round2,
+  localDate,
+  RATE_REQUIRED_MSG,
   computeTotals,
   todayRate,
+  todayRateOr409,
   amountToUsd,
   PAYMENT_LABELS,
   ORDER_STATUS,
