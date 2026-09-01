@@ -5,7 +5,7 @@ Aplicación híbrida de gestión para talleres (local, sin nube obligatoria):
 - **Backend local:** Node.js + Express en `127.0.0.1:3847`
 - **Base de datos:** SQLite nativo de Node.js (`node:sqlite`, WAL, transacciones ACID) en `data/tecnofix.db`
 - **Frontend:** PWA con Vite + React + Tailwind CSS
-- **Escritorio Windows:** contenedor Electron con acceso directo y auto-update vía **GitHub Releases**
+- **Escritorio Windows:** contenedor **Electron 36+** (Node 22 embebido con `node:sqlite`) y auto-update vía **GitHub Releases**
 
 Los precios maestros están en **USD**. BCV, Dólar € y USDT se registran en **Bolívares** y se usan para mostrar equivalentes y para cobros en Bs.
 
@@ -24,7 +24,7 @@ app Taller/
 │       └── pages/          # Módulos de la interfaz
 ├── server/                 # API Express + SQLite
 │   ├── db/schema.sql       # Modelo de datos
-│   ├── db/database.js      # Conexión WAL
+│   ├── db/database.js      # Conexión WAL (node:sqlite, Node 22 / Electron 36+)
 │   ├── db/migrate.js       # Permisos y columnas en bases ya creadas
 │   ├── db/seed.js          # Admin, roles y ajustes (sin datos de negocio)
 │   ├── middleware/auth.js  # JWT + requirePermission()
@@ -44,9 +44,9 @@ app Taller/
 
 ## 2. Requisitos
 
-- **Node.js 20+** (se recomienda 22 u 24; incluye `fetch` y `node:sqlite`)
+- **Node.js 22+** en desarrollo (`fetch` y `node:sqlite` van incluidos)
 - Windows 10/11 x64
-- Para el instalador Electron: el propio `electron-builder` (no hace falta compilar addons nativos de SQLite)
+- El `.exe` de escritorio lleva **Electron 36.9.5** (Node 22.19). No use Electron 34: embebe Node 20 y al abrir falla con `No such built-in module: node:sqlite`. No hace falta compilar addons nativos de SQLite.
 
 ---
 
@@ -137,7 +137,9 @@ npm run dist
 
 El instalador queda en `release/TecnoFix-Setup-1.0.0.exe`.
 
-En el PC del taller, la base de datos se guarda en la carpeta de usuario de Electron (`userData/data/tecnofix.db`), no junto al `.exe`, para que Windows permita escritura y las actualizaciones no borren los datos.
+Si ya tenía una instalación hecha con Electron 34, desinstálela o instale encima con este setup nuevo. Los datos del taller **no se pierden**: la base vive en `%APPDATA%\tecno-fix\data\`, no junto al `.exe`.
+
+En el PC del taller, la base de datos se guarda en la carpeta de usuario de Electron (`userData/data/tecnofix.db`) para que Windows permita escritura y las actualizaciones no borren los datos.
 
 ---
 

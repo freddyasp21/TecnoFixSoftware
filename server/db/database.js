@@ -1,11 +1,18 @@
 /**
- * Conexión SQLite nativa (módulo `node:sqlite` de Node 22+).
+ * Conexión SQLite nativa (módulo `node:sqlite` de Node 22+ / Electron 36+).
  * Sin addons C++: instala en Windows sin Visual Studio ni prebuilds.
  * WAL + foreign_keys para concurrencia local e integridad referencial.
  */
 const fs = require('fs');
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
+
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = require('node:sqlite'));
+} catch (err) {
+  err.message = `Tecno Fix necesita Node.js 22+ o Electron 36+ (módulo node:sqlite). ${err.message}`;
+  throw err;
+}
 
 function resolveDataDir() {
   if (process.env.TECNOFIX_DATA_DIR) return process.env.TECNOFIX_DATA_DIR;
