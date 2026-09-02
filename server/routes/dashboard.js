@@ -1,13 +1,14 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
+const { businessDate } = require('../utils/helpers');
 
 const router = express.Router();
 router.use(authRequired, requirePermission('dashboard.view'));
 
 router.get('/', (_req, res) => {
   const db = getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDate(db);
   const kpis = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM work_orders WHERE date(received_at) = date(?)) AS orders,

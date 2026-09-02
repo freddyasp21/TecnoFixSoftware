@@ -1,14 +1,15 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
+const { clampPeriodFrom } = require('../utils/opsDay');
 
 const router = express.Router();
 router.use(authRequired, requirePermission('reports.view'));
 
 router.get('/summary', (req, res) => {
-  const from = req.query.from || new Date().toISOString().slice(0, 10);
-  const to = req.query.to || from;
   const db = getDb();
+  const from = clampPeriodFrom(db, req.query.from || new Date().toISOString().slice(0, 10));
+  const to = req.query.to || from;
 
   const orders = db.prepare(`
     SELECT status, COUNT(*) AS n, COALESCE(SUM(total),0) AS total

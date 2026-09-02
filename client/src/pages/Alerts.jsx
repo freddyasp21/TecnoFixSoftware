@@ -18,7 +18,7 @@ function itemsForOrder(items, orderId) {
 }
 
 export default function Alerts() {
-  const { can, user } = useAuth();
+  const { can } = useAuth();
   const { data, error, reload, loading } = useAsync(() => api('/alerts'));
   const [tab, setTab] = useState('all');
   const c = data?.counts || { stock: 0, payroll: 0, collect: 0, parts: 0, ready: 0, total: 0 };
@@ -50,10 +50,12 @@ export default function Alerts() {
           <div className="text-xs font-semibold uppercase text-slate-500">Stock bajo</div>
           <div className="mt-1 text-2xl font-bold text-amber-700">{c.stock}</div>
         </button>
-        <button type="button" className="card p-4 text-left hover:border-sky-200" onClick={() => setTab('payroll')}>
-          <div className="text-xs font-semibold uppercase text-slate-500">Pagos a trabajadores</div>
-          <div className="mt-1 text-2xl font-bold text-sky-700">{c.payroll}</div>
-        </button>
+        {can('workers.view') && (
+          <button type="button" className="card p-4 text-left hover:border-sky-200" onClick={() => setTab('payroll')}>
+            <div className="text-xs font-semibold uppercase text-slate-500">Pagos a trabajadores</div>
+            <div className="mt-1 text-2xl font-bold text-sky-700">{c.payroll}</div>
+          </button>
+        )}
         <button type="button" className="card p-4 text-left hover:border-amber-200" onClick={() => setTab('parts')}>
           <div className="text-xs font-semibold uppercase text-slate-500">Piezas para órdenes</div>
           <div className="mt-1 text-2xl font-bold text-amber-800">{c.parts}</div>
@@ -65,7 +67,7 @@ export default function Alerts() {
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== 'payroll' || can('workers.view')).map((t) => (
           <button key={t.id} className={tab === t.id ? 'btn-dark' : 'btn-ghost'} onClick={() => setTab(t.id)}>
             {t.label}
             {t.id !== 'all' && c[t.id] ? ` (${c[t.id]})` : t.id === 'all' && c.total ? ` (${c.total})` : ''}
@@ -150,14 +152,14 @@ export default function Alerts() {
         </div>
       )}
 
-      {show.payroll && user?.role === 'Administrador' && (
+      {show.payroll && can('workers.view') && (
         <div className="card mb-6 table-wrap">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <h2 className="font-semibold text-ink-900">Nómina pendiente de pagar</h2>
               <p className="text-xs text-slate-500">
-                {data?.payroll?.period?.label || 'Quincena actual'} · sobre {data?.payroll?.payroll_pct ?? 40}% de ingresos.
-                Pendiente {usd(data?.payroll?.remaining_usd)}.
+                {data?.payroll?.period?.label || 'Quincena actual'} · comisiones {data?.payroll?.payroll_pct ?? 40}% de ingresos.
+                Pendiente comisiones {usd(data?.payroll?.remaining_usd)} · salarios {usd(data?.payroll?.salary_remaining_usd)}.
               </p>
             </div>
             <Link className="btn-ghost" to="/trabajadores">Ir a trabajadores</Link>
@@ -167,7 +169,7 @@ export default function Alerts() {
           ) : (
             <table className="data">
               <thead>
-                <tr><th>Trabajador</th><th>Cargo</th><th>Días</th><th>Asignado</th><th>Pagado</th><th>Pendiente</th><th></th></tr>
+                <tr><th>Trabajador</th><th>Cargo</th><th>Días</th><th>Comisión</th><th>Salario</th><th></th></tr>
               </thead>
               <tbody>
                 {data.payroll.workers.map((w) => (
@@ -175,9 +177,8 @@ export default function Alerts() {
                     <td className="font-medium">{w.full_name}</td>
                     <td>{w.position || '—'}</td>
                     <td>{w.days_worked}</td>
-                    <td>{usd(w.allocated_usd)}</td>
-                    <td>{usd(w.paid_usd)}</td>
                     <td className="font-semibold text-sky-800">{usd(w.remaining_usd)}</td>
+                    <td className="font-semibold text-indigo-800">{usd(w.salary_remaining_usd)}</td>
                     <td className="text-right"><Link className="btn-amber" to="/trabajadores">Pagar</Link></td>
                   </tr>
                 ))}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, usd, bs, statusMeta } from '../api';
+import { api, usd, bs, statusMeta, dayOnly, rateLabel } from '../api';
 
 export default function OrderPrint() {
   const { id } = useParams();
@@ -30,7 +30,11 @@ export default function OrderPrint() {
         <div className="text-right">
           <div className="text-xl font-bold">Orden {order.number}</div>
           <div className="text-sm">{m.label}</div>
-          <div className="text-xs text-slate-500">{order.received_at}</div>
+          <div className="text-xs text-slate-500">Cobro: {dayOnly(order.received_at) || order.received_at}</div>
+          {order.delivered_at && (
+            <div className="text-xs text-slate-500">Entrega: {dayOnly(order.delivered_at)}</div>
+          )}
+          <div className="mt-1 text-sm font-semibold">Tasa {rateLabel(order.rate_type)}: {bs(order.rate_value)} / USD</div>
         </div>
       </header>
       <section className="mb-6 grid grid-cols-2 gap-4 text-sm">
@@ -45,6 +49,7 @@ export default function OrderPrint() {
           <p>{order.device_brand} {order.device_model}</p>
           <p>S/N: {order.serial_number || '—'}</p>
           <p>Técnico: {order.technician_name || '—'}</p>
+          <p>Cajero: {order.cashier_name || '—'}</p>
         </div>
       </section>
       <p className="mb-4 text-sm"><b>Falla:</b> {order.fault_description || '—'}</p>
@@ -70,7 +75,8 @@ export default function OrderPrint() {
           <div className="flex justify-between"><span>IVA {order.iva_rate}% incluido</span><span>{usd(order.iva_amount)}</span></div>
         )}
         <div className="flex justify-between font-bold"><span>Total USD</span><span>{usd(order.total)}</span></div>
-        <div className="flex justify-between text-slate-500"><span>Total Bs ({order.rate_type})</span><span>{bs(order.total * order.rate_value)}</span></div>
+        <div className="flex justify-between text-slate-500"><span>Tasa {rateLabel(order.rate_type)}</span><span>{bs(order.rate_value)} / USD</span></div>
+        <div className="flex justify-between text-slate-500"><span>Total Bs</span><span>{bs(order.total * order.rate_value)}</span></div>
       </div>
       <p className="mt-16 text-center text-xs text-slate-400">Comprobante generado por Tecno Fix — Software para talleres</p>
     </div>

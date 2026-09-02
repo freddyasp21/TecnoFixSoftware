@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
 const { getSetting, nextNumber, computeTotals, todayRateOr409 } = require('../utils/helpers');
+const { requireOpsOpen } = require('../utils/opsDay');
 
 const router = express.Router();
 router.use(authRequired);
@@ -68,11 +69,12 @@ function persistItems(db, quoteId, items, ivaEnabled, ivaRate) {
 router.post('/', requirePermission('quotes.manage'), (req, res) => {
   const b = req.body || {};
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const rate = todayRateOr409(db, res);
   if (!rate) return;
   const rateType = b.rate_type || 'bcv';
   const rateValue = Number(b.rate_value) || rate[rateType];
-  const ivaEnabled = b.iva_enabled != null ? (b.iva_enabled ? 1 : 0) : (getSetting(db, 'iva_enabled') === '1' ? 1 : 0);
+  const ivaEnabled = b.iva_enabled != null ? (b.iva_enabled ? 1 : 0) : (getSetting(db, 'iva_enabled', '1') !== '0' ? 1 : 0);
   const ivaRate = Number(b.iva_rate) || Number(getSetting(db, 'iva_rate', '16'));
 
   const tx = db.transaction(() => {

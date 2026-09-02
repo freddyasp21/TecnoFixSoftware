@@ -4,7 +4,7 @@
  */
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
-const { nextNumber, ORDER_STATUS, round2, getSetting, setSetting, todayRate, localDate } = require('../utils/helpers');
+const { nextNumber, ORDER_STATUS, round2, getSetting, setSetting, todayRate, rateOnDate, localDate } = require('../utils/helpers');
 
 const MODULES = {
   clientes: {
@@ -45,6 +45,8 @@ const MODULES = {
       { key: 'document', header: 'Cédula', aliases: ['cedula', 'documento', 'document', 'ci'] },
       { key: 'phone', header: 'Teléfono', aliases: ['telefono', 'phone', 'celular'] },
       { key: 'position', header: 'Cargo', aliases: ['cargo', 'position', 'puesto'] },
+      { key: 'hired_at', header: 'Ingreso', aliases: ['ingreso', 'fechaingreso', 'hiredat', 'contratacion'] },
+      { key: 'base_salary_usd', header: 'Sueldo base USD', aliases: ['sueldobase', 'sueldo', 'salario', 'basesalary', 'salary'] },
       { key: 'share_weight', header: 'Peso nómina', aliases: ['pesonomina', 'peso', 'shareweight', 'share'] },
       { key: 'active', header: 'Estado', aliases: ['estado', 'activo', 'active'] },
       { key: 'notes', header: 'Notas', aliases: ['notas', 'notes'] },
@@ -67,10 +69,12 @@ const MODULES = {
       { key: 'fault_description', header: 'Falla', aliases: ['falla', 'fault', 'descripcionfalla'] },
       { key: 'service_name', header: 'Tipo de servicio', aliases: ['tiposervicio', 'servicio', 'service', 'servicetype'] },
       { key: 'physical_notes', header: 'Observaciones', aliases: ['observaciones', 'notas', 'notes', 'physicalnotes'] },
-      { key: 'technician_name', header: 'Técnico', aliases: ['tecnico', 'technician', 'responsable'] },
-      { key: 'total', header: 'Total USD', aliases: ['totalusd', 'total', 'monto', 'precio'] },
-      { key: 'received_at', header: 'Ingreso', aliases: ['ingreso', 'fecha', 'receivedat', 'recibido'] },
-      { key: 'delivered_at', header: 'Entrega', aliases: ['entrega', 'deliveredat', 'entregado'] },
+      { key: 'technician_name', header: 'Técnico responsable', aliases: ['tecnico', 'technician', 'responsable', 'tecnicoresponsable'] },
+      { key: 'cashier_name', header: 'Cajero', aliases: ['cajero', 'cashier', 'cobrador', 'cajera'] },
+      { key: 'total', header: 'Valor servicio USD', aliases: ['valorserviciousd', 'valorservicio', 'serviciousd', 'totalusd', 'total', 'monto', 'precio', 'preciousd'] },
+      { key: 'rate_bcv', header: 'Tasa BCV', aliases: ['tasabcv', 'tasa', 'bcv', 'tasabolivares', 'tasabs', 'ratebcv', 'rate'] },
+      { key: 'received_at', header: 'Fecha cobro', aliases: ['fechacobro', 'cobro', 'ingreso', 'fecha', 'receivedat', 'recibido', 'fechaorden'] },
+      { key: 'delivered_at', header: 'Fecha entrega', aliases: ['fechaentrega', 'entrega', 'deliveredat', 'entregado'] },
     ],
   },
 };
@@ -217,11 +221,20 @@ function findOrCreateClient(db, r) {
   return Number(info.lastInsertRowid);
 }
 
-function findTechnicianId(db, name) {
+function findUserId(db, name) {
   const n = String(name || '').trim();
   if (!n) return null;
-  const row = db.prepare('SELECT id FROM users WHERE full_name = ? COLLATE NOCASE').get(n);
+  const row = db.prepare(`
+    SELECT id FROM users
+    WHERE full_name = ? COLLATE NOCASE OR username = ? COLLATE NOCASE
+    ORDER BY active DESC
+    LIMIT 1
+  `).get(n, n);
   return row ? row.id : null;
+}
+
+function findTechnicianId(db, name) {
+  return findUserId(db, name);
 }
 
 function matchCatalogService(services, raw) {
@@ -242,16 +255,31 @@ function saveImportedServiceItem(db, orderId, r, catalog, unitPrice) {
   `).run(orderId, catalog ? catalog.id : null, description, price, price);
 }
 
+function parseMoney(v) {
+  const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function totalsFromGross(db, gross) {
   const total = round2(Number(gross) || 0);
-  const ivaEnabled = getSetting(db, 'iva_enabled') === '1' ? 1 : 0;
+  const ivaEnabled = 1;
   const ivaRate = Number(getSetting(db, 'iva_rate', '16')) || 16;
-  if (!ivaEnabled || !total) {
-    return { subtotal: total, iva_amount: 0, total, iva_enabled: ivaEnabled, iva_rate: ivaRate };
+  if (!total) {
+    return { subtotal: 0, iva_amount: 0, total: 0, iva_enabled: ivaEnabled, iva_rate: ivaRate };
   }
   const iva_amount = round2(total * ivaRate / (100 + ivaRate));
   const subtotal = round2(total - iva_amount);
   return { subtotal, iva_amount, total, iva_enabled: ivaEnabled, iva_rate: ivaRate };
+}
+
+/** Tasa BCV del día de cobro: columna del archivo, luego tasa registrada ese día, luego la de hoy. */
+function resolveOrderBcv(db, receivedAt, fileValue) {
+  const fromFile = parseMoney(fileValue);
+  if (fromFile > 0) return round2(fromFile);
+  const byDay = rateOnDate(db, receivedAt);
+  if (byDay && Number(byDay.bcv) > 0) return Number(byDay.bcv);
+  const today = todayRate(db);
+  return today && Number(today.bcv) > 0 ? Number(today.bcv) : 1;
 }
 
 function normalizeRow(moduleKey, raw) {
@@ -270,6 +298,7 @@ function normalizeRow(moduleKey, raw) {
   }
   if (moduleKey === 'trabajadores') {
     row.share_weight = row.share_weight === '' ? '1' : row.share_weight;
+    row.base_salary_usd = row.base_salary_usd === '' ? '0' : row.base_salary_usd;
     row.active = String(parseBool(row.active, 1));
   }
   if (moduleKey === 'ordenes') {
@@ -296,6 +325,9 @@ function validateRow(moduleKey, row, index) {
   }
   if (moduleKey === 'ordenes' && row.status && !ORDER_STATUS[row.status]) {
     errors.push(`Fila ${index + 1}: estado no válido (use recibido, diagnóstico, esperando_repuesto, reparación, listo, entregado o cancelado)`);
+  }
+  if (moduleKey === 'ordenes' && String(row.rate_bcv || '').trim() && !(parseMoney(row.rate_bcv) > 0)) {
+    errors.push(`Fila ${index + 1}: la tasa BCV debe ser un número mayor a cero`);
   }
   return errors;
 }
@@ -560,11 +592,12 @@ function commitDatasets(db, datasets, userId) {
       if (ds.module === 'trabajadores') {
         const findDoc = db.prepare('SELECT id FROM workers WHERE TRIM(document) != \'\' AND document = ? COLLATE NOCASE');
         const ins = db.prepare(`
-          INSERT INTO workers (full_name, document, phone, position, share_weight, notes, active)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO workers (full_name, document, phone, position, share_weight, hired_at, base_salary_usd, notes, active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const upd = db.prepare(`
-          UPDATE workers SET full_name = ?, document = ?, phone = ?, position = ?, share_weight = ?, notes = ?,
+          UPDATE workers SET full_name = ?, document = ?, phone = ?, position = ?, share_weight = ?,
+            hired_at = ?, base_salary_usd = ?, notes = ?,
             active = ?, updated_at = datetime('now','localtime') WHERE id = ?
         `);
         for (const r of rows) {
@@ -572,13 +605,15 @@ function commitDatasets(db, datasets, userId) {
           if (!name) continue;
           const doc = String(r.document || '').trim();
           const weight = Number(r.share_weight) > 0 ? Number(r.share_weight) : 1;
+          const salary = Number(r.base_salary_usd) >= 0 ? Number(r.base_salary_usd) : 0;
+          const hired = String(r.hired_at || '').trim().slice(0, 10);
           const active = parseBool(r.active, 1);
           const existing = doc ? findDoc.get(doc) : null;
           if (existing) {
-            upd.run(name, doc, r.phone || '', r.position || '', weight, r.notes || '', active, existing.id);
+            upd.run(name, doc, r.phone || '', r.position || '', weight, hired, salary, r.notes || '', active, existing.id);
             updated += 1;
           } else {
-            ins.run(name, doc, r.phone || '', r.position || '', weight, r.notes || '', active);
+            ins.run(name, doc, r.phone || '', r.position || '', weight, hired, salary, r.notes || '', active);
             inserted += 1;
           }
         }
@@ -587,37 +622,38 @@ function commitDatasets(db, datasets, userId) {
         const findNum = db.prepare('SELECT id FROM work_orders WHERE number = ? COLLATE NOCASE');
         const ins = db.prepare(`
           INSERT INTO work_orders (
-            number, quote_id, client_id, technician_id, status,
+            number, quote_id, client_id, technician_id, cashier_id, status,
             device_brand, device_model, serial_number, device_password,
             fault_description, physical_notes,
             rate_type, rate_value, iva_enabled, iva_rate,
             subtotal, iva_amount, total, received_at, ready_at, delivered_at, created_by
-          ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const upd = db.prepare(`
           UPDATE work_orders SET
-            client_id = ?, technician_id = ?, status = ?,
+            client_id = ?, technician_id = ?, cashier_id = ?, status = ?,
             device_brand = ?, device_model = ?, serial_number = ?, device_password = ?,
             fault_description = ?, physical_notes = ?,
+            rate_type = ?, rate_value = ?,
             iva_enabled = ?, iva_rate = ?, subtotal = ?, iva_amount = ?, total = ?,
             received_at = ?, ready_at = ?, delivered_at = ?,
             updated_at = datetime('now','localtime')
           WHERE id = ?
         `);
-        const rate = todayRate(db);
-        const rateType = 'bcv';
-        const rateValue = rate ? Number(rate.bcv) || 1 : 1;
         const services = db.prepare(`SELECT id, code, name, price_usd FROM catalog_items WHERE type = 'service'`).all();
         for (const r of rows) {
           const clientName = String(r.client_name || '').trim();
           if (!clientName) continue;
           const clientId = findOrCreateClient(db, r);
           const status = parseOrderStatus(r.status) || 'recibido';
-          const techId = findTechnicianId(db, r.technician_name);
+          const techId = findUserId(db, r.technician_name);
+          const cashierId = findUserId(db, r.cashier_name) || userId;
           const catalog = matchCatalogService(services, r.service_name);
-          const gross = Number(r.total) || (catalog ? Number(catalog.price_usd) : 0);
+          const gross = parseMoney(r.total) || (catalog ? Number(catalog.price_usd) : 0);
           const totals = totalsFromGross(db, gross);
           const receivedAt = parseDateTime(r.received_at, '') || `${localDate()} 00:00:00`;
+          const rateType = 'bcv';
+          const rateValue = resolveOrderBcv(db, receivedAt, r.rate_bcv);
           let deliveredAt = parseDateTime(r.delivered_at, '') || null;
           let readyAt = null;
           if (status === 'entregado' && !deliveredAt) deliveredAt = receivedAt;
@@ -627,9 +663,10 @@ function commitDatasets(db, datasets, userId) {
           let orderId;
           if (existing) {
             upd.run(
-              clientId, techId, status,
+              clientId, techId, cashierId, status,
               r.device_brand || '', r.device_model || '', r.serial_number || '', r.device_password || '',
               r.fault_description || '', r.physical_notes || '',
+              rateType, rateValue,
               totals.iva_enabled, totals.iva_rate, totals.subtotal, totals.iva_amount, totals.total,
               receivedAt, readyAt, deliveredAt, existing.id
             );
@@ -639,12 +676,12 @@ function commitDatasets(db, datasets, userId) {
             const number = existingNum || nextNumber(db, 'order_seq', 'OT');
             if (existingNum) bumpSeqIfNeeded(db, 'order_seq', number);
             const info = ins.run(
-              number, clientId, techId, status,
+              number, clientId, techId, cashierId, status,
               r.device_brand || '', r.device_model || '', r.serial_number || '', r.device_password || '',
               r.fault_description || '', r.physical_notes || '',
               rateType, rateValue, totals.iva_enabled, totals.iva_rate,
               totals.subtotal, totals.iva_amount, totals.total,
-              receivedAt, readyAt, deliveredAt, userId
+              receivedAt, readyAt, deliveredAt, cashierId
             );
             orderId = Number(info.lastInsertRowid);
             inserted += 1;

@@ -19,6 +19,7 @@ const PERMISSIONS = [
   ['orders.delete', 'ordenes', 'Eliminar órdenes de trabajo'],
   ['calendar.view', 'calendario', 'Ver calendario operativo'],
   ['calendar.manage', 'calendario', 'Marcar días laborados'],
+  ['ops.manage', 'operacion', 'Fijar fecha de inicio y cerrar el día operativo'],
   ['inventory.view', 'inventario', 'Consultar inventario'],
   ['inventory.manage', 'inventario', 'Ajustar stock y kardex'],
   ['clients.view', 'clientes', 'Consultar clientes'],
@@ -36,6 +37,29 @@ const PERMISSIONS = [
 
 /** Permisos por rol (el Administrador recibe todos automáticamente). */
 const ROLE_PERMS = {
+  Gerente: [
+    'dashboard.view', 'rates.view',
+    'catalog.view', 'catalog.manage',
+    'quotes.view', 'quotes.manage', 'quotes.delete',
+    'orders.view', 'orders.manage', 'orders.delete',
+    'calendar.view', 'calendar.manage', 'ops.manage',
+    'inventory.view', 'inventory.manage',
+    'clients.view', 'clients.manage',
+    'cash.view', 'cash.manage',
+    'finance.view', 'finance.manage',
+    'workers.view', 'workers.manage',
+    'alerts.view', 'reports.view',
+  ],
+  Supervisor: [
+    'dashboard.view', 'rates.view',
+    'catalog.view', 'catalog.manage',
+    'quotes.view', 'quotes.manage',
+    'orders.view', 'orders.manage',
+    'calendar.view', 'calendar.manage',
+    'inventory.view', 'inventory.manage',
+    'clients.view', 'clients.manage',
+    'alerts.view', 'reports.view',
+  ],
   Tecnico: [
     'dashboard.view', 'rates.view', 'catalog.view', 'catalog.manage',
     'quotes.view', 'orders.view', 'orders.manage',
@@ -52,14 +76,20 @@ const ROLE_PERMS = {
   ],
 };
 
+const ROLE_DEFS = [
+  ['Administrador', 'Acceso total al sistema'],
+  ['Tecnico', 'Gestión de órdenes, catálogo y calendario'],
+  ['Cajero', 'Caja, cotizaciones y clientes. Sin borrar órdenes ni editar inventario'],
+  ['Gerente', 'Opera el taller: caja, finanzas y nómina. Sin usuarios, importación ni ajustes'],
+  ['Supervisor', 'Supervisa órdenes, cotizaciones, inventario y catálogo'],
+];
+
 function seed(db) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (count > 0) return;
 
   const insertRole = db.prepare('INSERT OR IGNORE INTO roles (name, description, is_system) VALUES (?, ?, 1)');
-  insertRole.run('Administrador', 'Acceso total al sistema');
-  insertRole.run('Tecnico', 'Gestión de órdenes, catálogo y calendario');
-  insertRole.run('Cajero', 'Caja, cotizaciones y clientes. Sin borrar órdenes ni editar inventario');
+  for (const [name, description] of ROLE_DEFS) insertRole.run(name, description);
 
   const insertPerm = db.prepare('INSERT OR IGNORE INTO permissions (code, module, description) VALUES (?, ?, ?)');
   for (const [code, module, description] of PERMISSIONS) {
@@ -97,7 +127,7 @@ function seed(db) {
     shop_phone: '',
     shop_address: '',
     shop_rif: '',
-    iva_enabled: '0',
+    iva_enabled: '1',
     iva_rate: '16',
     github_owner: 'freddyasp21',
     github_repo: 'TecnoFixSoftware',
@@ -108,9 +138,10 @@ function seed(db) {
     finance_pct_payroll: '40',
     finance_pct_supplies: '30',
     finance_pct_savings: '20',
+    salary_increment_pct_per_year: '5',
     app_version: require('../../package.json').version,
   };
   for (const [k, v] of Object.entries(defaults)) set.run(k, v);
 }
 
-module.exports = { seed };
+module.exports = { seed, ROLE_DEFS, ROLE_PERMS };

@@ -20,7 +20,7 @@ export default function QuoteForm() {
   const [clientMsg, setClientMsg] = useState('');
   const [form, setForm] = useState({
     client_id: '', status: 'borrador', rate_type: 'bcv', rate_value: 1,
-    iva_enabled: false, iva_rate: 16, notes: '', items: [],
+    iva_enabled: true, iva_rate: 16, notes: '', items: [],
   });
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { api, usd, bs, ORDER_STATUS, computeTotals } from '../api';
+import { api, usd, bs, ORDER_STATUS, computeTotals, localDate, dayOnly, rateLabel } from '../api';
 import LineItems from '../components/LineItems';
 import { ErrorBox, Field, PageHeader, Switch } from '../components/ui';
 import { useAuth } from '../auth';
@@ -11,26 +11,31 @@ export default function OrderForm() {
   const { can } = useAuth();
   const [clients, setClients] = useState([]);
   const [techs, setTechs] = useState([]);
+  const [cashiers, setCashiers] = useState([]);
   const [error, setError] = useState('');
   const [number, setNumber] = useState('');
   const [form, setForm] = useState({
-    client_id: '', technician_id: '', status: 'recibido',
+    client_id: '', technician_id: '', cashier_id: '', status: 'recibido',
     device_brand: '', device_model: '', serial_number: '', device_password: '',
     fault_description: '', physical_notes: '',
-    rate_type: 'bcv', rate_value: 1, iva_enabled: false, iva_rate: 16, items: [],
+    received_at: '', delivered_at: '',
+    rate_type: 'bcv', rate_value: 1, iva_enabled: true, iva_rate: 16, items: [],
   });
 
   useEffect(() => {
     if (!id) return;
     api('/clients').then(setClients).catch(() => {});
     api('/orders/lookups/technicians').then(setTechs).catch(() => {});
+    api('/orders/lookups/cashiers').then(setCashiers).catch(() => {});
     api(`/orders/${id}`).then((o) => {
       setNumber(o.number);
       setForm({
-        client_id: o.client_id || '', technician_id: o.technician_id || '', status: o.status,
+        client_id: o.client_id || '', technician_id: o.technician_id || '', cashier_id: o.cashier_id || '',
+        status: o.status,
         device_brand: o.device_brand || '', device_model: o.device_model || '',
         serial_number: o.serial_number || '', device_password: o.device_password || '',
         fault_description: o.fault_description || '', physical_notes: o.physical_notes || '',
+        received_at: dayOnly(o.received_at), delivered_at: dayOnly(o.delivered_at),
         rate_type: o.rate_type, rate_value: o.rate_value, iva_enabled: !!o.iva_enabled,
         iva_rate: o.iva_rate, items: o.items || [],
       });
@@ -47,7 +52,13 @@ export default function OrderForm() {
     if (!id) return;
     setError('');
     try {
-      const body = { ...form, client_id: form.client_id || null, technician_id: form.technician_id || null };
+      const body = {
+        ...form,
+        client_id: form.client_id || null,
+        technician_id: form.technician_id || null,
+        cashier_id: form.cashier_id || null,
+        delivered_at: form.status === 'entregado' ? (form.delivered_at || localDate()) : '',
+      };
       const saved = await api(`/orders/${id}`, { method: 'PUT', body });
       navigate(`/ordenes/${saved.id}`);
     } catch (err) { setError(err.message); }
@@ -59,7 +70,7 @@ export default function OrderForm() {
     <form onSubmit={save}>
       <PageHeader
         title={number || 'Orden de trabajo'}
-        subtitle="La orden nació del cobro en caja. Aquí se actualiza el equipo, el técnico y el estado."
+        subtitle="La orden nació del cobro en caja. El día de la orden es el mismo del cobro. Aquí se ve la tasa BCV de ese día, el técnico, el cajero y el estado."
         actions={
           <>
             <Link className="btn-ghost" to={`/ordenes/${id}/imprimir`}>Imprimir comprobante</Link>
@@ -83,10 +94,36 @@ export default function OrderForm() {
                 {techs.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
             </Field>
+            <Field label="Cajero (cobro)">
+              <select value={form.cashier_id} onChange={(e) => setForm({ ...form, cashier_id: e.target.value })}>
+                <option value="">— Sin asignar —</option>
+                {cashiers.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </Field>
             <Field label="Estado">
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <select
+                value={form.status}
+                onChange={(e) => {
+                  const status = e.target.value;
+                  const next = { ...form, status };
+                  if (status === 'entregado' && !next.delivered_at) next.delivered_at = localDate();
+                  if (status !== 'entregado') next.delivered_at = next.delivered_at;
+                  setForm(next);
+                }}
+              >
                 {ORDER_STATUS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
+            </Field>
+            <Field label="Fecha de cobro / orden">
+              <input type="date" value={form.received_at} onChange={(e) => setForm({ ...form, received_at: e.target.value })} />
+            </Field>
+            <Field label="Fecha de entrega">
+              <input
+                type="date"
+                value={form.delivered_at}
+                onChange={(e) => setForm({ ...form, delivered_at: e.target.value })}
+                disabled={form.status !== 'entregado'}
+              />
             </Field>
             <Field label="Marca"><input value={form.device_brand} onChange={(e) => setForm({ ...form, device_brand: e.target.value })} /></Field>
             <Field label="Modelo"><input value={form.device_model} onChange={(e) => setForm({ ...form, device_model: e.target.value })} /></Field>
@@ -98,14 +135,23 @@ export default function OrderForm() {
           <LineItems items={form.items} setItems={(items) => setForm({ ...form, items })} />
         </div>
         <div className="card space-y-4 p-5">
-          <Field label="Tasa">
+          <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">Tasa del cobro</div>
+            <div className="mt-1 text-2xl font-bold text-sky-950">{bs(form.rate_value)} / USD</div>
+            <p className="mt-1 text-xs text-sky-800">
+              {rateLabel(form.rate_type)} del {form.received_at || 'día de cobro'}. Queda fijada en la orden.
+            </p>
+          </div>
+          <Field label="Tipo de tasa">
             <select value={form.rate_type} onChange={(e) => setForm({ ...form, rate_type: e.target.value })}>
               <option value="bcv">BCV</option>
               <option value="euro">Dólar €</option>
               <option value="usdt">USDT</option>
             </select>
           </Field>
-          <Field label="Valor de la tasa (Bs)"><input type="number" step="0.01" value={form.rate_value} onChange={(e) => setForm({ ...form, rate_value: e.target.value })} /></Field>
+          <Field label="Tasa de bolívares (Bs / USD)">
+            <input type="number" step="0.01" value={form.rate_value} onChange={(e) => setForm({ ...form, rate_value: e.target.value })} />
+          </Field>
           <Switch
             checked={form.iva_enabled}
             onChange={(v) => setForm({ ...form, iva_enabled: v })}

@@ -123,9 +123,10 @@ export default function Cash() {
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('caja')}>Exportar Excel</button>
-            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/finanzas">Finanzas</Link>}
-            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
-            {can('cash.manage') && !session && !ratesMissing && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
+            {can('finance.view') && <Link className="btn-ghost" to="/finanzas">Finanzas</Link>}
+            {can('workers.view') && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
+            {can('ops.manage') && <Link className="btn-ghost" to="/calendario">Día operativo</Link>}
+            {can('cash.manage') && !session && !ratesMissing && data?.ops?.configured && <button className="btn-primary" onClick={() => { setOpenForm({ open_usd: 0, open_bs: 0, open_usdt: 0, notes: '' }); setMsg(''); }}>Abrir caja</button>}
             {can('cash.manage') && !session && ratesMissing && <Link className="btn-primary" to="/tasas">Actualizar tasa</Link>}
             {can('cash.manage') && session && (
               <>
@@ -137,6 +138,14 @@ export default function Cash() {
         }
       />
       <ErrorBox error={error || msg} />
+      {data && data.ops && !data.ops.configured && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Fije la fecha de inicio en el <Link className="font-semibold underline" to="/calendario">calendario</Link> antes de abrir caja.
+        </div>
+      )}
+      {data?.ops?.configured && (
+        <p className="mb-4 text-sm text-slate-600">Día operativo {data.ops.current_date} · inicio de cálculos {data.ops.start_date}</p>
+      )}
       {ratesMissing && <RateGate action="abrir caja" />}
 
       {(data?.pendingQuotes || []).length > 0 && (
@@ -348,12 +357,13 @@ export default function Cash() {
                 <input type="number" step="0.01" min="0.01" value={collect.amount} onChange={(e) => setCollect({ ...collect, amount: e.target.value })} required />
               </Field>
             </div>
-            <Field label="Técnico">
+            <Field label="Técnico responsable">
               <select value={collect.technician_id} onChange={(e) => setCollect({ ...collect, technician_id: e.target.value })}>
                 <option value="">— Sin asignar —</option>
                 {techs.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
             </Field>
+            <p className="text-xs text-slate-500">Cajero del cobro: <b>{user?.full_name}</b>. La fecha de la orden es la del día operativo de este cobro.</p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Marca"><input value={collect.device_brand} onChange={(e) => setCollect({ ...collect, device_brand: e.target.value })} /></Field>
               <Field label="Modelo"><input value={collect.device_model} onChange={(e) => setCollect({ ...collect, device_model: e.target.value })} /></Field>

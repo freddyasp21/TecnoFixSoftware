@@ -6,7 +6,9 @@ import { useAuth } from '../auth';
 
 export default function Dashboard() {
   const { can, user } = useAuth();
-  const isAdmin = user?.role === 'Administrador';
+  const canRates = can('rates.manage');
+  const canHistory = user?.role === 'Administrador' || user?.role === 'Gerente';
+  const canFinance = can('finance.view');
   const [data, setData] = useState(null);
   const [alerts, setAlerts] = useState(null);
   const [rates, setRates] = useState(null);
@@ -28,6 +30,9 @@ export default function Dashboard() {
     if (can('alerts.view')) {
       api('/alerts/summary').then(setAlerts).catch(() => {});
     }
+    api('/ops').then((ops) => {
+      if (ops?.current_date) setForm((f) => ({ ...f, rate_date: ops.current_date }));
+    }).catch(() => {});
     loadRates();
   }, []);
 
@@ -49,13 +54,15 @@ export default function Dashboard() {
     { label: 'Entregas hoy', value: k.delivered ?? '—', to: '/ordenes' },
     { label: 'Stock bajo', value: k.low_stock ?? '—', to: '/inventario' },
   ];
-  if (isAdmin) {
+  if (canFinance) {
     cards.push(
       { label: 'Ingresos USD', value: usd(k.income_usd), to: '/finanzas' },
       { label: 'Egresos USD', value: usd(k.expense_usd), to: '/finanzas' },
       { label: 'Gestión financiera', value: '40 / 30 / 20', to: '/finanzas' },
-      { label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' },
     );
+  }
+  if (can('workers.view')) {
+    cards.push({ label: 'Trabajadores / nómina', value: 'Quincena', to: '/trabajadores' });
   }
   if (can('alerts.view') || can('dashboard.view')) {
     cards.push({ label: 'Alertas', value: alertTotal, to: '/alertas', alert: alertTotal > 0 });
@@ -76,7 +83,7 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title="Panel operativo"
-        subtitle="Resumen del día en el taller"
+        subtitle="Resumen del día operativo en el taller"
       />
 
       {ratesReady && (
@@ -87,7 +94,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className={`font-semibold ${ratesOk ? 'text-emerald-950' : 'text-rose-950'}`}>
-                {isAdmin ? 'Actualizar tasa' : 'Tasa del día'}
+                {canRates ? 'Actualizar tasa' : 'Tasa del día'}
               </h2>
               {ratesOk ? (
                 <p className="mt-1 text-sm text-emerald-900">
@@ -95,14 +102,14 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-rose-900">
-                  {isAdmin
+                  {canRates
                     ? 'Aún no hay tasas del día. Actualícelas para abrir caja y cotizar.'
                     : 'Aún no hay tasas del día. El administrador debe actualizarlas para abrir caja y cotizar.'}
                 </p>
               )}
             </div>
             <Link to="/tasas" className={ratesOk ? 'btn-ghost' : 'btn-primary'}>
-              {ratesOk ? 'Ver historial' : 'Ir a Tasas'}
+              {ratesOk ? (canHistory ? 'Ver historial' : 'Ver tasa del día') : 'Ir a Tasas'}
             </Link>
           </div>
 
@@ -115,7 +122,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : isAdmin ? (
+          ) : canRates ? (
             <form onSubmit={saveRates} className="mt-4 grid gap-3 md:grid-cols-5">
               <Field label="Fecha"><input type="date" value={form.rate_date} onChange={(e) => setForm({ ...form, rate_date: e.target.value })} /></Field>
               <Field label="BCV (Bs / USD)"><input type="number" step="0.01" value={form.bcv} onChange={(e) => setForm({ ...form, bcv: e.target.value })} required /></Field>

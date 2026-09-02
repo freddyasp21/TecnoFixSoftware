@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../auth';
 import { api } from '../api';
 import { useAsync } from './ui';
+import OpsBanner from './OpsBanner';
 
 const NAV = [
   { to: '/', label: 'Panel', icon: LayoutDashboard, perm: 'dashboard.view' },
@@ -16,9 +17,9 @@ const NAV = [
   { to: '/catalogo', label: 'Catálogo', icon: Package, perm: 'catalog.view' },
   { to: '/inventario', label: 'Inventario', icon: Boxes, perm: 'inventory.view' },
   { to: '/clientes', label: 'Clientes', icon: Users, perm: 'clients.view' },
-  { to: '/trabajadores', label: 'Trabajadores', icon: HardHat, admin: true },
+  { to: '/trabajadores', label: 'Trabajadores', icon: HardHat, perm: 'workers.view' },
   { to: '/caja', label: 'Caja', icon: Wallet, perm: 'cash.view' },
-  { to: '/finanzas', label: 'Finanzas', icon: Banknote, admin: true },
+  { to: '/finanzas', label: 'Finanzas', icon: Banknote, perm: 'finance.view' },
   { to: '/tasas', label: 'Tasas', icon: BadgeDollarSign, everyone: true },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
   { to: '/importar', label: 'Importar', icon: Upload, admin: true },
@@ -94,6 +95,7 @@ export default function Layout() {
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-6 lg:p-8">
+        <OpsBanner />
         <Outlet />
       </main>
     </div>

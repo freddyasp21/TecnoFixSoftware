@@ -76,7 +76,8 @@ export default function ImportData() {
         { key: 'document', header: 'Cédula' },
         { key: 'phone', header: 'Teléfono' },
         { key: 'position', header: 'Cargo' },
-        { key: 'share_weight', header: 'Peso nómina' },
+        { key: 'hired_at', header: 'Ingreso' },
+        { key: 'base_salary_usd', header: 'Sueldo base USD' },
         { key: 'active', header: 'Estado' },
         { key: 'notes', header: 'Notas' },
       ];
@@ -94,10 +95,12 @@ export default function ImportData() {
       { key: 'fault_description', header: 'Falla' },
       { key: 'service_name', header: 'Tipo de servicio' },
       { key: 'physical_notes', header: 'Observaciones' },
-      { key: 'technician_name', header: 'Técnico' },
-      { key: 'total', header: 'Total USD' },
-      { key: 'received_at', header: 'Ingreso' },
-      { key: 'delivered_at', header: 'Entrega' },
+      { key: 'technician_name', header: 'Técnico responsable' },
+      { key: 'cashier_name', header: 'Cajero' },
+      { key: 'total', header: 'Valor servicio USD' },
+      { key: 'rate_bcv', header: 'Tasa BCV' },
+      { key: 'received_at', header: 'Fecha cobro' },
+      { key: 'delivered_at', header: 'Fecha entrega' },
     ];
   }, [current]);
 
@@ -222,15 +225,18 @@ export default function ImportData() {
             El código único actualiza el ítem existente.
           </li>
           <li>
-            <b>Trabajadores</b> — Nombre*, Cédula, Teléfono, Cargo, Peso nómina, Estado, Notas.
+            <b>Trabajadores</b> — Nombre*, Cédula, Teléfono, Cargo, Ingreso, Sueldo base USD, Estado, Notas.
             La cédula existente actualiza; si no hay cédula se crea uno nuevo.
           </li>
           <li>
             <b>Órdenes</b> — Número (si se deja vacío se asigna OT-0001…), Cliente*, Cédula/RIF, Teléfono,
             Estado (recibido, diagnóstico, esperando_repuesto, reparación, listo, entregado, cancelado),
             Marca, Modelo, Serial, Contraseña, Falla, Tipo de servicio (nombre o código del catálogo),
-            Observaciones, Técnico (nombre de usuario), Total USD, Ingreso, Entrega.
+            Observaciones, Técnico responsable (nombre de usuario), Cajero (quien cobró),
+            Valor servicio USD, Tasa BCV (Bs por 1 USD del día de cobro),
+            Fecha cobro (mismo día de la orden y del cobro en caja), Fecha entrega (si ya se entregó el equipo).
             Si el número ya existe se actualiza; si no, se crea. El cliente se busca por cédula o nombre y se crea si no aparece.
+            El IVA 16% queda incluido en el valor del servicio. La tasa BCV se guarda en la orden; si la columna va vacía se usa la tasa registrada ese día de cobro.
             Sirve para cargar órdenes históricas; las nuevas del día a día siguen saliendo de cotización + cobro en caja.
           </li>
         </ol>

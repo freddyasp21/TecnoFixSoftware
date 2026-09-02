@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, rateLabel, localDate } from '../api';
 import { ErrorBox, Field, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
 export default function Rates() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'Administrador';
+  const { can, user } = useAuth();
+  const canRates = can('rates.manage');
+  const canHistory = user?.role === 'Administrador' || user?.role === 'Gerente';
   const { data, error, reload } = useAsync(() => api('/rates'));
-  const today = localDate();
-  const [form, setForm] = useState({ rate_date: today, bcv: '', euro: '', usdt: '' });
+  const opsQ = useAsync(() => api('/ops').catch(() => null));
+  const today = opsQ.data?.current_date || localDate();
+  const [form, setForm] = useState({ rate_date: localDate(), bcv: '', euro: '', usdt: '' });
   const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (opsQ.data?.current_date) {
+      setForm((f) => ({ ...f, rate_date: opsQ.data.current_date }));
+    }
+  }, [opsQ.data?.current_date]);
 
   async function save(e) {
     e.preventDefault();
@@ -22,13 +30,18 @@ export default function Rates() {
 
   return (
     <div>
-      <PageHeader title="Tasas de cambio" subtitle="Registro diario en Bolívares: BCV, Dólar € y USDT Binance" />
+      <PageHeader
+        title="Tasas de cambio"
+        subtitle={canHistory
+          ? 'Registro diario en Bolívares: BCV, Dólar € y USDT Binance'
+          : 'Tasa del día en Bolívares: BCV, Dólar € y USDT Binance'}
+      />
       <ErrorBox error={error} />
       {data && !data.today && (
         <div className="mb-6 rounded-2xl border-2 border-rose-400 bg-rose-100 p-5">
           <h2 className="font-semibold text-rose-950">Tasa del día pendiente</h2>
           <p className="mt-1 text-sm text-rose-900">
-            Sin tasas de hoy no se puede abrir caja ni cotizar. La orden se crea al cobrar la cotización.
+            Sin tasas del día operativo ({today}) no se puede abrir caja ni cotizar. La orden se crea al cobrar la cotización.
           </p>
         </div>
       )}
@@ -40,7 +53,7 @@ export default function Rates() {
           </p>
         </div>
       )}
-      {isAdmin && (
+      {canRates && (
         <form onSubmit={save} className="card mb-6 grid gap-3 p-5 md:grid-cols-5">
           <Field label="Fecha"><input type="date" value={form.rate_date} onChange={(e) => setForm({ ...form, rate_date: e.target.value })} /></Field>
           <Field label="BCV (Bs / USD)"><input type="number" step="0.01" value={form.bcv} onChange={(e) => setForm({ ...form, bcv: e.target.value })} required /></Field>
@@ -50,24 +63,26 @@ export default function Rates() {
           {msg && <div className="md:col-span-5"><ErrorBox error={msg} /></div>}
         </form>
       )}
-      <div className="card table-wrap">
-        <table className="data">
-          <thead>
-            <tr><th>Fecha</th><th>BCV</th><th>Dólar €</th><th>USDT</th><th>Registró</th></tr>
-          </thead>
-          <tbody>
-            {(data?.history || []).map((r) => (
-              <tr key={r.id}>
-                <td>{r.rate_date}</td>
-                <td>{Number(r.bcv).toLocaleString('es-VE')}</td>
-                <td>{Number(r.euro).toLocaleString('es-VE')}</td>
-                <td>{Number(r.usdt).toLocaleString('es-VE')}</td>
-                <td>{r.created_by_name}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {canHistory && (
+        <div className="card table-wrap">
+          <table className="data">
+            <thead>
+              <tr><th>Fecha</th><th>BCV</th><th>Dólar €</th><th>USDT</th><th>Registró</th></tr>
+            </thead>
+            <tbody>
+              {(data?.history || []).map((r) => (
+                <tr key={r.id}>
+                  <td>{r.rate_date}</td>
+                  <td>{Number(r.bcv).toLocaleString('es-VE')}</td>
+                  <td>{Number(r.euro).toLocaleString('es-VE')}</td>
+                  <td>{Number(r.usdt).toLocaleString('es-VE')}</td>
+                  <td>{r.created_by_name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <p className="mt-3 text-xs text-slate-500">
         Las cotizaciones y cobros toman un snapshot de la tasa {rateLabel('bcv')} / Euro / USDT seleccionada al momento de guardar.
       </p>

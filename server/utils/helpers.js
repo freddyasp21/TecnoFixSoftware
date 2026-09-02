@@ -32,11 +32,35 @@ function localDate(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-const RATE_REQUIRED_MSG = 'Debe actualizar las tasas del día (BCV, Euro y USDT) antes de abrir caja o cotizar.';
+/** Día operativo actual; si aún no se fijó el inicio, usa la fecha del reloj. */
+function businessDate(db) {
+  const v = getSetting(db, 'ops_current_date', '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : localDate();
+}
 
-/** Tasa registrada hoy. Si no hay fila del día, null (no se reutiliza la de ayer). */
+function businessDateTime(db) {
+  const day = businessDate(db);
+  const now = new Date();
+  const t = [
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join(':');
+  return `${day} ${t}`;
+}
+
+const RATE_REQUIRED_MSG = 'Debe actualizar las tasas del día operativo (BCV, Euro y USDT) antes de abrir caja o cotizar.';
+
+/** Tasa registrada para una fecha YYYY-MM-DD (día de cobro de una orden). */
+function rateOnDate(db, date) {
+  const day = String(date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return db.prepare('SELECT * FROM exchange_rates WHERE rate_date = ?').get(day) || null;
+}
+
+/** Tasa del día operativo. Si no hay fila de ese día, null (no se reutiliza la de ayer). */
 function todayRate(db) {
-  return db.prepare('SELECT * FROM exchange_rates WHERE rate_date = ?').get(localDate()) || null;
+  return rateOnDate(db, businessDate(db));
 }
 
 function todayRateOr409(db, res) {
@@ -94,8 +118,11 @@ module.exports = {
   nextNumber,
   round2,
   localDate,
+  businessDate,
+  businessDateTime,
   RATE_REQUIRED_MSG,
   computeTotals,
+  rateOnDate,
   todayRate,
   todayRateOr409,
   amountToUsd,

@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS quotes (
                  CHECK (status IN ('borrador','enviada','aprobada','rechazada','convertida')),
   rate_type    TEXT NOT NULL DEFAULT 'bcv' CHECK (rate_type IN ('bcv','euro','usdt')),
   rate_value   REAL NOT NULL DEFAULT 1,
-  iva_enabled  INTEGER NOT NULL DEFAULT 0,
+  iva_enabled  INTEGER NOT NULL DEFAULT 1,
   iva_rate     REAL NOT NULL DEFAULT 16,
   subtotal     REAL NOT NULL DEFAULT 0,
   iva_amount   REAL NOT NULL DEFAULT 0,
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   physical_notes    TEXT,
   rate_type         TEXT NOT NULL DEFAULT 'bcv' CHECK (rate_type IN ('bcv','euro','usdt')),
   rate_value        REAL NOT NULL DEFAULT 1,
-  iva_enabled       INTEGER NOT NULL DEFAULT 0,
+  iva_enabled       INTEGER NOT NULL DEFAULT 1,
   iva_rate          REAL NOT NULL DEFAULT 16,
   subtotal          REAL NOT NULL DEFAULT 0,
   iva_amount        REAL NOT NULL DEFAULT 0,
@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   ready_at          TEXT,
   delivered_at      TEXT,
   created_by        INTEGER REFERENCES users(id),
+  cashier_id        INTEGER REFERENCES users(id),
   created_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   updated_at        TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
@@ -234,7 +235,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   description     TEXT,
   created_by      INTEGER REFERENCES users(id),
   created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  finance_bucket  TEXT CHECK (finance_bucket IS NULL OR finance_bucket IN ('payroll','supplies','savings','operation')),
+  finance_bucket  TEXT CHECK (finance_bucket IS NULL OR finance_bucket IN ('payroll','supplies','savings','operation','salary')),
   worker_id       INTEGER
 );
 
@@ -263,6 +264,20 @@ CREATE TABLE IF NOT EXISTS sale_items (
 );
 
 -- -----------------------------------------------------------------------------
+-- Día operativo: cierre diario (solo admin/gerente). El software no avanza
+-- de día hasta este cierre. La fecha de inicio vive en settings.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS business_days (
+  day         TEXT PRIMARY KEY,
+  status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  opened_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  opened_by   INTEGER REFERENCES users(id),
+  closed_at   TEXT,
+  closed_by   INTEGER REFERENCES users(id),
+  notes       TEXT
+);
+
+-- -----------------------------------------------------------------------------
 -- Calendario operativo: marcar días laborados
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS work_days (
@@ -273,9 +288,8 @@ CREATE TABLE IF NOT EXISTS work_days (
 );
 
 -- -----------------------------------------------------------------------------
--- Trabajadores y nómina quincenal (1-15 / 16-último)
--- El 40% de los ingresos de caja del período se reparte según días laborados.
--- El pago se registra como egreso de caja en el sobre "payroll".
+-- Trabajadores: comisión quincenal (% de caja por días laborados) y salario fijo con antigüedad.
+-- El pago de comisión va al sobre "payroll"; el de salario al sobre "salary".
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS workers (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -285,6 +299,8 @@ CREATE TABLE IF NOT EXISTS workers (
   phone         TEXT,
   position      TEXT,
   share_weight  REAL NOT NULL DEFAULT 1 CHECK (share_weight > 0),
+  hired_at      TEXT,
+  base_salary_usd REAL NOT NULL DEFAULT 0,
   active        INTEGER NOT NULL DEFAULT 1,
   notes         TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
@@ -311,6 +327,7 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
   days_worked          INTEGER NOT NULL DEFAULT 0,
   allocated_usd        REAL NOT NULL DEFAULT 0,
   amount_usd           REAL NOT NULL CHECK (amount_usd > 0),
+  kind                 TEXT NOT NULL DEFAULT 'commission',
   cash_transaction_id  INTEGER REFERENCES cash_transactions(id),
   created_by           INTEGER REFERENCES users(id),
   created_at           TEXT NOT NULL DEFAULT (datetime('now','localtime'))

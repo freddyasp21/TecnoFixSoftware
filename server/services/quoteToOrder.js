@@ -2,7 +2,7 @@
  * Crea la orden de trabajo a partir de una cotización ya cobrada.
  * Debe ejecutarse dentro de una transacción del llamador (caja).
  */
-const { nextNumber } = require('../utils/helpers');
+const { nextNumber, businessDateTime } = require('../utils/helpers');
 const { deductProducts } = require('./inventory');
 
 function convertQuoteToOrder(db, quote, extra, userId) {
@@ -26,18 +26,19 @@ function convertQuoteToOrder(db, quote, extra, userId) {
   const number = nextNumber(db, 'order_seq', 'OT');
   const info = db.prepare(`
     INSERT INTO work_orders (
-      number, quote_id, client_id, technician_id, status,
+      number, quote_id, client_id, technician_id, cashier_id, status,
       device_brand, device_model, serial_number, device_password,
       fault_description, physical_notes,
       rate_type, rate_value, iva_enabled, iva_rate,
-      subtotal, iva_amount, total, created_by
-    ) VALUES (?, ?, ?, ?, 'recibido', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      subtotal, iva_amount, total, created_by, received_at
+    ) VALUES (?, ?, ?, ?, ?, 'recibido', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     number, quote.id, quote.client_id, b.technician_id ? Number(b.technician_id) : null,
+    b.cashier_id ? Number(b.cashier_id) : userId,
     b.device_brand || '', b.device_model || '', b.serial_number || '',
     b.device_password || '', b.fault_description || '', b.physical_notes || '',
     quote.rate_type, quote.rate_value, quote.iva_enabled, quote.iva_rate,
-    quote.subtotal, quote.iva_amount, quote.total, userId
+    quote.subtotal, quote.iva_amount, quote.total, userId, businessDateTime(db)
   );
   const orderId = Number(info.lastInsertRowid);
   const ins = db.prepare(`

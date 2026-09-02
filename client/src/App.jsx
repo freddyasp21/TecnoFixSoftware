@@ -42,6 +42,12 @@ function AdminOnly({ children }) {
   return children;
 }
 
+function PermOnly({ perm, children }) {
+  const { can } = useAuth();
+  if (!can(perm)) return <Navigate to="/" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -64,8 +70,8 @@ export default function App() {
         <Route path="clientes" element={<Clients />} />
         <Route path="clientes/:id" element={<ClientDetail />} />
         <Route path="caja" element={<Cash />} />
-        <Route path="finanzas" element={<AdminOnly><Finance /></AdminOnly>} />
-        <Route path="trabajadores" element={<AdminOnly><Workers /></AdminOnly>} />
+        <Route path="finanzas" element={<PermOnly perm="finance.view"><Finance /></PermOnly>} />
+        <Route path="trabajadores" element={<PermOnly perm="workers.view"><Workers /></PermOnly>} />
         <Route path="reportes" element={<Reports />} />
         <Route path="importar" element={<AdminOnly><ImportData /></AdminOnly>} />
         <Route path="configuracion" element={<Settings />} />

@@ -30,6 +30,7 @@ function createApp() {
   app.use('/api/quotes', require('./routes/quotes'));
   app.use('/api/orders', require('./routes/orders'));
   app.use('/api/calendar', require('./routes/calendar'));
+  app.use('/api/ops', require('./routes/ops'));
   app.use('/api/inventory', require('./routes/inventory'));
   app.use('/api/cash', require('./routes/cash'));
   app.use('/api/finance', require('./routes/finance'));

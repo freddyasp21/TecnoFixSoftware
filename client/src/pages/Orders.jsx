@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, downloadExcel, usd, statusMeta, ORDER_STATUS } from '../api';
+import { api, downloadExcel, usd, bs, statusMeta, ORDER_STATUS, dayOnly, rateLabel } from '../api';
 import { Badge, ErrorBox, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -31,7 +31,7 @@ export default function Orders() {
     <div>
       <PageHeader
         title="Órdenes de trabajo"
-        subtitle="La orden se crea al cobrar la cotización en caja. Aquí se sigue el trabajo, estados y técnico."
+        subtitle="La orden se crea al cobrar en caja. Aquí se ve el técnico, el cajero, la tasa BCV del cobro y las fechas."
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('ordenes')}>Exportar Excel</button>
@@ -50,7 +50,10 @@ export default function Orders() {
       <div className="card table-wrap">
         <table className="data">
           <thead>
-            <tr><th>Número</th><th>Cotización</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Técnico</th><th>Total</th><th></th></tr>
+            <tr>
+              <th>Número</th><th>Cliente</th><th>Equipo</th><th>Estado</th>
+              <th>Técnico</th><th>Cajero</th><th>Fecha cobro</th><th>Fecha entrega</th><th>Tasa BCV</th><th>Total USD</th><th></th>
+            </tr>
           </thead>
           <tbody>
             {(data || []).map((o) => {
@@ -58,11 +61,16 @@ export default function Orders() {
               return (
                 <tr key={o.id}>
                   <td className="font-semibold"><Link className="text-brand-600" to={`/ordenes/${o.id}`}>{o.number}</Link></td>
-                  <td>{o.quote_number || '—'}</td>
                   <td>{o.client_name || '—'}</td>
                   <td>{[o.device_brand, o.device_model].filter(Boolean).join(' ') || '—'}</td>
                   <td><Badge className={m.color}>{m.label}</Badge></td>
                   <td>{o.technician_name || '—'}</td>
+                  <td>{o.cashier_name || '—'}</td>
+                  <td className="whitespace-nowrap">{dayOnly(o.received_at) || '—'}</td>
+                  <td className="whitespace-nowrap">{dayOnly(o.delivered_at) || '—'}</td>
+                  <td className="whitespace-nowrap text-xs">
+                    {rateLabel(o.rate_type)} {bs(o.rate_value)}
+                  </td>
                   <td>{usd(o.total)}</td>
                   <td className="space-x-2 text-right">
                     <Link className="btn-ghost" to={`/ordenes/${o.id}/imprimir`}>Imprimir</Link>

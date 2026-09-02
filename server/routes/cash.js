@@ -1,8 +1,10 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
-const { getSetting, nextNumber, computeTotals, todayRateOr409, amountToUsd } = require('../utils/helpers');
+const { getSetting, nextNumber, computeTotals, todayRateOr409, amountToUsd, businessDateTime } = require('../utils/helpers');
 const { convertQuoteToOrder } = require('../services/quoteToOrder');
+const { requireOpsOpen, opsSnapshot } = require('../utils/opsDay');
+const { deductProducts } = require('../services/inventory');
 
 const METHODS = ['usd_cash', 'bs_cash', 'bs_mobile', 'usdt'];
 const router = express.Router();
@@ -44,7 +46,8 @@ router.get('/current', requirePermission('cash.view'), (_req, res) => {
     ORDER BY q.updated_at DESC
   `).all();
   const session = currentSession(db);
-  if (!session) return res.json({ session: null, breakdown: null, movements: [], pendingQuotes });
+  const ops = opsSnapshot(db);
+  if (!session) return res.json({ session: null, breakdown: null, movements: [], pendingQuotes, ops });
   const movements = db.prepare(`
     SELECT t.*, c.name AS client_name, wo.number AS order_number, u.full_name AS created_by_name,
            w.full_name AS worker_name
@@ -56,7 +59,7 @@ router.get('/current', requirePermission('cash.view'), (_req, res) => {
     WHERE t.session_id = ?
     ORDER BY t.created_at DESC
   `).all(session.id);
-  res.json({ session, breakdown: breakdown(db, session.id), movements, pendingQuotes });
+  res.json({ session, breakdown: breakdown(db, session.id), movements, pendingQuotes, ops: opsSnapshot(db) });
 });
 
 router.get('/sessions', requirePermission('cash.view'), (_req, res) => {
@@ -72,15 +75,16 @@ router.get('/sessions', requirePermission('cash.view'), (_req, res) => {
 
 router.post('/open', requirePermission('cash.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   if (!todayRateOr409(db, res)) return;
   if (currentSession(db)) {
     return res.status(400).json({ error: 'Ya existe una caja abierta' });
   }
   const b = req.body || {};
   const info = db.prepare(`
-    INSERT INTO cash_sessions (opened_by, open_usd, open_bs, open_usdt, notes, status)
-    VALUES (?, ?, ?, ?, ?, 'open')
-  `).run(req.user.id, Number(b.open_usd) || 0, Number(b.open_bs) || 0, Number(b.open_usdt) || 0, b.notes || '');
+    INSERT INTO cash_sessions (opened_by, open_usd, open_bs, open_usdt, notes, status, opened_at)
+    VALUES (?, ?, ?, ?, ?, 'open', ?)
+  `).run(req.user.id, Number(b.open_usd) || 0, Number(b.open_bs) || 0, Number(b.open_usdt) || 0, b.notes || '', businessDateTime(db));
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
@@ -104,6 +108,7 @@ router.post('/close', requirePermission('cash.manage'), (req, res) => {
 
 router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const session = currentSession(db);
   if (!session) return res.status(400).json({ error: 'Debe abrir caja antes de registrar movimientos' });
   const b = req.body || {};
@@ -113,7 +118,7 @@ router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
   if (!['income', 'expense'].includes(b.type) || !(Number(b.amount) > 0)) {
     return res.status(400).json({ error: 'Tipo y monto válidos son obligatorios' });
   }
-  const FINANCE_BUCKETS = ['payroll', 'supplies', 'savings', 'operation'];
+  const FINANCE_BUCKETS = ['payroll', 'salary', 'supplies', 'savings', 'operation'];
   if (b.type === 'expense' && b.finance_bucket && !FINANCE_BUCKETS.includes(b.finance_bucket)) {
     return res.status(400).json({ error: 'Clasificación financiera no válida' });
   }
@@ -126,12 +131,12 @@ router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
   const info = db.prepare(`
     INSERT INTO cash_transactions (
       session_id, type, payment_method, amount, amount_usd, rate_type, rate_value,
-      client_id, work_order_id, quote_id, description, created_by, finance_bucket
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      client_id, work_order_id, quote_id, description, created_by, finance_bucket, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     session.id, b.type, b.payment_method, Number(b.amount), amountUsd,
     rateType, rateValue, b.client_id || null, b.work_order_id || null,
-    b.quote_id || null, b.description || '', req.user.id, bucket
+    b.quote_id || null, b.description || '', req.user.id, bucket, businessDateTime(db)
   );
   res.status(201).json({ id: info.lastInsertRowid, amount_usd: amountUsd });
 });
@@ -139,13 +144,14 @@ router.post('/transactions', requirePermission('cash.manage'), (req, res) => {
 /** Venta directa de mostrador: descuenta inventario + ingreso de caja. */
 router.post('/sale', requirePermission('cash.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const session = currentSession(db);
   if (!session) return res.status(400).json({ error: 'Debe abrir caja antes de vender' });
   const b = req.body || {};
   if (!METHODS.includes(b.payment_method)) {
     return res.status(400).json({ error: 'Método de pago no permitido' });
   }
-  const ivaEnabled = getSetting(db, 'iva_enabled') === '1';
+  const ivaEnabled = getSetting(db, 'iva_enabled', '1') !== '0';
   const ivaRate = Number(getSetting(db, 'iva_rate', '16'));
   const rate = todayRateOr409(db, res);
   if (!rate) return;
@@ -180,9 +186,9 @@ router.post('/sale', requirePermission('cash.manage'), (req, res) => {
       db.prepare(`
         INSERT INTO cash_transactions (
           session_id, type, payment_method, amount, amount_usd, rate_type, rate_value,
-          client_id, description, created_by
-        ) VALUES (?, 'income', ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(session.id, b.payment_method, payAmount, amountUsd, rateType, rateValue, b.client_id || null, `Venta ${number}`, req.user.id);
+          client_id, description, created_by, created_at
+        ) VALUES (?, 'income', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(session.id, b.payment_method, payAmount, amountUsd, rateType, rateValue, b.client_id || null, `Venta ${number}`, req.user.id, businessDateTime(db));
       return { id: sale.lastInsertRowid, number, ...totals };
     })();
     res.status(201).json(result);
@@ -194,6 +200,7 @@ router.post('/sale', requirePermission('cash.manage'), (req, res) => {
 /** Cobra una cotización aprobada: registra el ingreso y, si el cobro es exitoso, crea la orden. */
 router.post('/collect-quote', requirePermission('cash.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const session = currentSession(db);
   if (!session) return res.status(400).json({ error: 'Debe abrir caja antes de cobrar una cotización' });
   const b = req.body || {};
@@ -220,12 +227,12 @@ router.post('/collect-quote', requirePermission('cash.manage'), (req, res) => {
       db.prepare(`
         INSERT INTO cash_transactions (
           session_id, type, payment_method, amount, amount_usd, rate_type, rate_value,
-          client_id, work_order_id, quote_id, description, created_by
-        ) VALUES (?, 'income', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          client_id, work_order_id, quote_id, description, created_by, created_at
+        ) VALUES (?, 'income', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         session.id, b.payment_method, payAmount, amountUsd, rateType, rateValue,
         quote.client_id, order.id, quote.id,
-        `Cobro ${quote.number} → ${order.number}`, req.user.id
+        `Cobro ${quote.number} → ${order.number}`, req.user.id, businessDateTime(db)
       );
       return { order, amount: payAmount, amount_usd: amountUsd };
     })();

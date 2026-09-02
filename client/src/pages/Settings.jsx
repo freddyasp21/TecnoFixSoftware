@@ -77,7 +77,7 @@ export default function Settings() {
             <Switch
               checked={!!form.iva_enabled}
               onChange={(v) => setForm({ ...form, iva_enabled: v })}
-              label="Aplicar IVA 16% en cotizaciones y cobros"
+              label="Aplicar IVA 16% en cotizaciones, órdenes y cobros (activo por defecto)"
             />
             <p className="mt-2 text-xs text-slate-500">Al activarlo, el IVA se descuenta del precio en USD (queda incluido). El total a cobrar no aumenta. Si está apagado, el monto de los ítems se cobra completo, sin IVA.</p>
           </div>

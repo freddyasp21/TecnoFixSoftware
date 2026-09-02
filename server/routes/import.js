@@ -25,12 +25,13 @@ router.get('/spec', (_req, res) => {
         code: 'SRV-001', type: 'service', name: 'Mantenimiento', description: '',
         price_usd: 25, stock: 0, min_stock: 0, estimated_minutes: 60, active: 1,
       }],
-      trabajadores: [{ full_name: 'Juan Técnico', document: 'V-456', phone: '', position: 'Técnico', share_weight: 1, active: 1, notes: '' }],
+      trabajadores: [{ full_name: 'Juan Técnico', document: 'V-456', phone: '', position: 'Técnico', hired_at: '2024-01-15', base_salary_usd: 200, active: 1, notes: '' }],
       ordenes: [{
         number: 'OT-0001', client_name: 'María Pérez', document: 'V-123', phone: '0414-0000000',
         status: 'recibido', device_brand: 'Samsung', device_model: 'A54', serial_number: '',
         device_password: '', fault_description: 'No enciende', service_name: 'Mantenimiento',
-        physical_notes: '', technician_name: '', total: 25, received_at: '', delivered_at: '',
+        physical_notes: '', technician_name: 'Carlos Técnico', cashier_name: 'Ana Cajero',
+        total: 25, rate_bcv: 36.50, received_at: '2026-09-01', delivered_at: '',
       }],
     },
   });

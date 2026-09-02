@@ -33,10 +33,10 @@ function collectAlerts(db, user) {
     `).all();
   }
 
-  if (user.role === 'Administrador') {
+  if (userCan(user, 'workers.view')) {
     const period = currentPeriod();
     const payroll = buildPayroll(db, period);
-    const due = payroll.workers.filter((w) => w.remaining_usd > 0);
+    const due = payroll.workers.filter((w) => w.remaining_usd > 0 || w.salary_remaining_usd > 0);
     data.payroll = {
       period: payroll.period,
       payroll_pct: payroll.payroll_pct,
@@ -44,6 +44,7 @@ function collectAlerts(db, user) {
       pool_usd: payroll.pool_usd,
       paid_usd: payroll.paid_usd,
       remaining_usd: payroll.remaining_usd,
+      salary_remaining_usd: payroll.salary_remaining_usd,
       workers: due,
     };
   }

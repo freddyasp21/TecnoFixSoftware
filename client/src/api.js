@@ -100,7 +100,8 @@ export const bs = (n) =>
   `${new Intl.NumberFormat('es-VE', { maximumFractionDigits: 2 }).format(Number(n) || 0)} Bs`;
 
 export const FINANCE_BUCKETS = [
-  { id: 'payroll', label: 'Trabajadores' },
+  { id: 'payroll', label: 'Comisiones' },
+  { id: 'salary', label: 'Salario' },
   { id: 'supplies', label: 'Insumos, piezas y herramientas' },
   { id: 'savings', label: 'Ahorros e inversión' },
   { id: 'operation', label: 'Utilidad / operación' },
@@ -136,6 +137,11 @@ export function localDate(d = new Date()) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+export function dayOnly(s) {
+  if (!s) return '';
+  return String(s).slice(0, 10);
 }
 
 function round2(n) {

@@ -6,11 +6,14 @@ import { useAuth } from '../auth';
 
 const ENVELOPE_STYLE = {
   payroll: { bar: 'bg-sky-500', wrap: 'bg-sky-50 border-sky-100', pct: 'text-sky-700' },
+  salary: { bar: 'bg-indigo-500', wrap: 'bg-indigo-50 border-indigo-100', pct: 'text-indigo-700' },
   supplies: { bar: 'bg-amber-500', wrap: 'bg-amber-50 border-amber-100', pct: 'text-amber-800' },
   savings: { bar: 'bg-emerald-500', wrap: 'bg-emerald-50 border-emerald-100', pct: 'text-emerald-700' },
   operation: { bar: 'bg-slate-500', wrap: 'bg-slate-50 border-slate-200', pct: 'text-slate-700' },
   iva: { bar: 'bg-violet-500', wrap: 'bg-violet-50 border-violet-100', pct: 'text-violet-800' },
 };
+
+const ENVELOPE_ORDER = ['payroll', 'salary', 'supplies', 'savings', 'operation', 'iva'];
 
 function monthStart() {
   const d = new Date();
@@ -22,10 +25,10 @@ function today() {
 }
 
 export default function Finance() {
-  const { can, user } = useAuth();
+  const { can } = useAuth();
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
-  const [rulesForm, setRulesForm] = useState({ payroll: 40, supplies: 30, savings: 20 });
+  const [rulesForm, setRulesForm] = useState({ payroll: 40, supplies: 30, savings: 20, salary_increment_pct: 5 });
   const [msg, setMsg] = useState('');
   const { data, error, reload } = useAsync(
     () => api(`/finance?from=${from}&to=${to}`),
@@ -38,6 +41,7 @@ export default function Finance() {
         payroll: data.rules.payroll,
         supplies: data.rules.supplies,
         savings: data.rules.savings,
+        salary_increment_pct: data.rules.salary_increment_pct ?? 5,
       });
     }
   }, [data]);
@@ -58,7 +62,10 @@ export default function Finance() {
         remaining: null,
       },
     ];
-    return cards.sort((a, b) => Number(b.pct) - Number(a.pct) || String(a.label).localeCompare(String(b.label)));
+    return ENVELOPE_ORDER
+      .map((id) => cards.find((c) => c.id === id))
+      .filter(Boolean)
+      .concat(cards.filter((c) => !ENVELOPE_ORDER.includes(c.id)));
   }, [envelopes, data?.iva_rate, data?.iva_usd]);
 
   async function saveRules(e) {
@@ -90,15 +97,18 @@ export default function Finance() {
     <div>
       <PageHeader
         title="Gestión financiera"
-        subtitle="Cada ingreso de caja se reparte en sobres. Los egresos se descuentan del sobre que elija."
+        subtitle="Los ingresos de caja alimentan comisiones, insumos, ahorro y operación. El salario es un monto fijo por trabajador."
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('finanzas')}>Exportar Excel</button>
             {can('cash.view') && <Link className="btn-ghost" to="/caja">Ir a caja</Link>}
-            {user?.role === 'Administrador' && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
+            {can('workers.view') && <Link className="btn-ghost" to="/trabajadores">Trabajadores</Link>}
           </>
         }
       />
+      {data?.ops?.start_date && (
+        <p className="mb-4 text-sm text-slate-600">Cálculos desde {data.ops.start_date} · día operativo {data.ops.current_date}</p>
+      )}
       <ErrorBox error={error || (msg && !msg.startsWith('Reglas') ? msg : '')} />
       {msg.startsWith('Reglas') && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div>
@@ -135,14 +145,20 @@ export default function Finance() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-5">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {envelopeCards.map((env) => {
           const style = ENVELOPE_STYLE[env.id] || ENVELOPE_STYLE.operation;
           const isIva = env.id === 'iva';
+          const isSalary = env.id === 'salary';
           const over = !isIva && env.remaining < 0;
           const usedPct = env.allocated > 0
             ? Math.min(100, (env.spent / env.allocated) * 100)
             : (env.spent > 0 ? 100 : 0);
+          const allocatedHint = isIva
+            ? 'A reservar sobre ingresos de caja'
+            : isSalary
+              ? 'Sueldo fijo del período (no sale del % de ingresos)'
+              : 'Asignado de los ingresos del período';
           return (
             <div key={env.id} className={`card border p-4 md:p-3 lg:p-5 ${style.wrap}`}>
               <div className="flex items-start justify-between gap-2">
@@ -150,12 +166,10 @@ export default function Finance() {
                   <div className="font-semibold text-ink-900">{env.label}</div>
                   <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{env.hint}</p>
                 </div>
-                <div className={`shrink-0 text-lg font-bold ${style.pct}`}>{env.pct}%</div>
+                <div className={`shrink-0 text-lg font-bold ${style.pct}`}>{env.pctLabel || `${env.pct}%`}</div>
               </div>
               <div className="mt-3 text-xl font-bold text-ink-900 lg:mt-4 lg:text-2xl">{usd(env.allocated)}</div>
-              <div className="text-xs text-slate-500">
-                {isIva ? 'A reservar sobre ingresos de caja' : 'Asignado de los ingresos del período'}
-              </div>
+              <div className="text-xs text-slate-500">{allocatedHint}</div>
               {!isIva && (
                 <>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80">
@@ -182,11 +196,11 @@ export default function Finance() {
         <form className="card mb-6 p-5" onSubmit={saveRules}>
           <h2 className="mb-1 font-semibold text-ink-900">Reglas de reparto</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Sobre cada dólar que entra a caja. El resto hasta 100% queda en utilidad / operación
-            (por defecto 40% + 30% + 20% = 90%, y 10% de operación).
+            Sobre cada dólar que entra a caja se reparte comisión, insumos y ahorro. El resto hasta 100% queda en utilidad / operación.
+            El salario es un monto fijo por trabajador; el incremento anual lo define admin o gerente.
           </p>
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Field label="Trabajadores %">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <Field label="Comisiones %">
               <input type="number" min="0" max="100" step="1" value={rulesForm.payroll} onChange={(e) => setRulesForm({ ...rulesForm, payroll: e.target.value })} />
             </Field>
             <Field label="Insumos / piezas %">
@@ -198,6 +212,9 @@ export default function Finance() {
             <Field label="Utilidad / operación %">
               <input value={restPct} disabled />
             </Field>
+            <Field label="Incremento salario % / año">
+              <input type="number" min="0" max="100" step="0.5" value={rulesForm.salary_increment_pct} onChange={(e) => setRulesForm({ ...rulesForm, salary_increment_pct: e.target.value })} />
+            </Field>
           </div>
           <button className="btn-primary mt-4">Guardar reglas</button>
         </form>
@@ -207,17 +224,18 @@ export default function Finance() {
         <div className="card mb-6 table-wrap">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="font-semibold text-ink-900">Nómina registrada</h2>
-            <p className="text-xs text-slate-500">Pagos a trabajadores hechos desde caja, descontados del sobre del 40%.</p>
+            <p className="text-xs text-slate-500">Pagos desde caja: comisión (sobre de ingresos) o salario fijo.</p>
           </div>
           <table className="data">
             <thead>
-              <tr><th>Fecha</th><th>Trabajador</th><th>Quincena</th><th>Días</th><th>Pagado USD</th></tr>
+              <tr><th>Fecha</th><th>Trabajador</th><th>Tipo</th><th>Quincena</th><th>Días</th><th>Pagado USD</th></tr>
             </thead>
             <tbody>
               {data.payroll.map((p) => (
                 <tr key={p.id}>
                   <td className="whitespace-nowrap">{p.created_at}</td>
                   <td className="font-medium">{p.worker_name}</td>
+                  <td>{p.kind === 'salary' ? 'Salario' : 'Comisión'}</td>
                   <td>{p.period_from} → {p.period_to}</td>
                   <td>{p.days_worked}</td>
                   <td className="text-rose-700">{usd(p.amount_usd)}</td>

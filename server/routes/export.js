@@ -8,7 +8,8 @@ const { authRequired, requirePermission } = require('../middleware/auth');
 const { PAYMENT_LABELS, ORDER_STATUS } = require('../utils/helpers');
 
 const FINANCE_LABELS = {
-  payroll: 'Trabajadores',
+  payroll: 'Comisiones',
+  salary: 'Salario',
   supplies: 'Insumos, piezas y herramientas',
   savings: 'Ahorros e inversión',
   operation: 'Utilidad / operación',
@@ -106,10 +107,11 @@ const MODULES = {
   },
   ordenes: () => {
     const rows = getDb().prepare(`
-      SELECT wo.*, c.name AS client_name, t.full_name AS technician_name
+      SELECT wo.*, c.name AS client_name, t.full_name AS technician_name, k.full_name AS cashier_name
       FROM work_orders wo
       LEFT JOIN clients c ON c.id = wo.client_id
       LEFT JOIN users t ON t.id = wo.technician_id
+      LEFT JOIN users k ON k.id = wo.cashier_id
       ORDER BY wo.received_at DESC
     `).all().map((r) => ({ ...r, status_label: ORDER_STATUS[r.status] || r.status }));
     return {
@@ -121,10 +123,13 @@ const MODULES = {
         { header: 'Marca', key: 'device_brand', width: 14 },
         { header: 'Modelo', key: 'device_model', width: 18 },
         { header: 'Serial', key: 'serial_number', width: 18 },
-        { header: 'Técnico', key: 'technician_name', width: 20 },
-        { header: 'Total USD', key: 'total', width: 12 },
-        { header: 'Ingreso', key: 'received_at', width: 20 },
-        { header: 'Entrega', key: 'delivered_at', width: 20 },
+        { header: 'Técnico responsable', key: 'technician_name', width: 22 },
+        { header: 'Cajero', key: 'cashier_name', width: 20 },
+        { header: 'Valor servicio USD', key: 'total', width: 16 },
+        { header: 'Tasa BCV', key: 'rate_value', width: 14 },
+        { header: 'IVA', key: 'iva_amount', width: 12 },
+        { header: 'Fecha cobro', key: 'received_at', width: 20 },
+        { header: 'Fecha entrega', key: 'delivered_at', width: 20 },
       ],
       rows,
     };
@@ -213,7 +218,7 @@ const MODULES = {
   },
   trabajadores: () => {
     const rows = getDb().prepare(`
-      SELECT full_name, document, phone, position, share_weight, active, created_at
+      SELECT full_name, document, phone, position, hired_at, base_salary_usd, active, created_at
       FROM workers ORDER BY active DESC, full_name
     `).all().map((r) => ({ ...r, active_label: r.active ? 'Activo' : 'Inactivo' }));
     return {
@@ -223,7 +228,8 @@ const MODULES = {
         { header: 'Cédula', key: 'document', width: 16 },
         { header: 'Teléfono', key: 'phone', width: 16 },
         { header: 'Cargo', key: 'position', width: 18 },
-        { header: 'Peso nómina', key: 'share_weight', width: 14 },
+        { header: 'Ingreso', key: 'hired_at', width: 14 },
+        { header: 'Sueldo base USD', key: 'base_salary_usd', width: 16 },
         { header: 'Estado', key: 'active_label', width: 12 },
         { header: 'Alta', key: 'created_at', width: 20 },
       ],
@@ -238,14 +244,16 @@ const MODULES = {
       ORDER BY p.created_at DESC
     `).all().map((r) => ({
       ...r,
-      kind_label: r.period_kind === 'q1' ? '1 al 15' : '16 al último',
+      kind_label: r.kind === 'salary' ? 'Salario' : 'Comisión',
+      quincena_label: r.period_kind === 'q1' ? '1 al 15' : '16 al último',
     }));
     return {
       sheet: 'Nomina',
       columns: [
         { header: 'Fecha pago', key: 'created_at', width: 20 },
         { header: 'Trabajador', key: 'worker_name', width: 24 },
-        { header: 'Quincena', key: 'kind_label', width: 14 },
+        { header: 'Tipo', key: 'kind_label', width: 12 },
+        { header: 'Quincena', key: 'quincena_label', width: 14 },
         { header: 'Desde', key: 'period_from', width: 12 },
         { header: 'Hasta', key: 'period_to', width: 12 },
         { header: 'Días', key: 'days_worked', width: 8 },
@@ -258,8 +266,10 @@ const MODULES = {
 };
 
 router.get('/:module', async (req, res) => {
-  if (['finanzas', 'trabajadores', 'nomina'].includes(req.params.module) && req.user.role !== 'Administrador') {
-    return res.status(403).json({ error: 'Solo el administrador puede exportar este módulo' });
+  if (['finanzas', 'trabajadores', 'nomina'].includes(req.params.module)) {
+    const need = req.params.module === 'finanzas' ? 'finance.view' : 'workers.view';
+    const ok = req.user.role === 'Administrador' || (req.user.permissions || []).includes(need);
+    if (!ok) return res.status(403).json({ error: 'No tiene permiso para exportar este módulo' });
   }
   const factory = MODULES[req.params.module];
   if (!factory) return res.status(404).json({ error: 'Módulo de exportación no válido' });

@@ -1,12 +1,20 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requireAdmin } = require('../middleware/auth');
-const { todayRate, localDate } = require('../utils/helpers');
+const { todayRate, businessDate } = require('../utils/helpers');
 
 const router = express.Router();
 router.use(authRequired);
 
+function canSeeRateHistory(user) {
+  return user.role === 'Administrador' || user.role === 'Gerente';
+}
+
 router.get('/', (req, res) => {
+  const today = todayRate(getDb());
+  if (!canSeeRateHistory(req.user)) {
+    return res.json({ today, history: [] });
+  }
   const limit = Math.min(parseInt(req.query.limit, 10) || 60, 365);
   const rows = getDb().prepare(`
     SELECT r.*, u.full_name AS created_by_name
@@ -15,7 +23,7 @@ router.get('/', (req, res) => {
     ORDER BY r.rate_date DESC
     LIMIT ?
   `).all(limit);
-  res.json({ today: todayRate(getDb()), history: rows });
+  res.json({ today, history: rows });
 });
 
 router.get('/today', (_req, res) => {
@@ -24,7 +32,7 @@ router.get('/today', (_req, res) => {
 
 router.post('/', requireAdmin, (req, res) => {
   const { rate_date, bcv, euro, usdt } = req.body || {};
-  const date = rate_date || localDate();
+  const date = rate_date || businessDate(getDb());
   if (!(Number(bcv) > 0 && Number(euro) > 0 && Number(usdt) > 0)) {
     return res.status(400).json({ error: 'Las tres tasas (BCV, Euro, USDT) deben ser mayores a cero' });
   }

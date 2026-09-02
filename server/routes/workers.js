@@ -3,13 +3,14 @@
  */
 const express = require('express');
 const { getDb } = require('../db/database');
-const { authRequired, requireAdmin } = require('../middleware/auth');
-const { todayRate, amountToUsd, round2 } = require('../utils/helpers');
-const { quincena, buildPayroll } = require('../utils/payroll');
+const { authRequired, requirePermission } = require('../middleware/auth');
+const { todayRate, amountToUsd, round2, businessDateTime } = require('../utils/helpers');
+const { quincena, buildPayroll, yearsOfService, effectiveMonthlySalary, salaryIncrementPct } = require('../utils/payroll');
+const { requireOpsOpen, isDayOperable, opsSnapshot } = require('../utils/opsDay');
 
 const METHODS = ['usd_cash', 'bs_cash', 'bs_mobile', 'usdt'];
 const router = express.Router();
-router.use(authRequired, requireAdmin);
+router.use(authRequired);
 
 function currentSession(db) {
   return db.prepare(`
@@ -17,17 +18,27 @@ function currentSession(db) {
   `).get();
 }
 
-router.get('/', (_req, res) => {
-  const rows = getDb().prepare(`
+router.get('/', requirePermission('workers.view'), (_req, res) => {
+  const db = getDb();
+  const inc = salaryIncrementPct(db);
+  const rows = db.prepare(`
     SELECT w.*, u.full_name AS user_name
     FROM workers w
     LEFT JOIN users u ON u.id = w.user_id
     ORDER BY w.active DESC, w.full_name COLLATE NOCASE
-  `).all();
+  `).all().map((w) => {
+    const years = yearsOfService(w.hired_at);
+    return {
+      ...w,
+      years_service: years,
+      monthly_salary_usd: effectiveMonthlySalary(w, inc),
+      salary_increment_pct: inc,
+    };
+  });
   res.json(rows);
 });
 
-router.post('/', (req, res) => {
+router.post('/', requirePermission('workers.manage'), (req, res) => {
   const b = req.body || {};
   if (!String(b.full_name || '').trim()) {
     return res.status(400).json({ error: 'El nombre del trabajador es obligatorio' });
@@ -37,8 +48,8 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'El peso de nómina debe ser mayor a cero' });
   }
   const info = getDb().prepare(`
-    INSERT INTO workers (user_id, full_name, document, phone, position, share_weight, notes, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO workers (user_id, full_name, document, phone, position, share_weight, hired_at, base_salary_usd, notes, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     b.user_id || null,
     String(b.full_name).trim(),
@@ -46,13 +57,15 @@ router.post('/', (req, res) => {
     b.phone || '',
     b.position || '',
     weight > 0 ? weight : 1,
+    b.hired_at || '',
+    Number(b.base_salary_usd) >= 0 ? Number(b.base_salary_usd) : 0,
     b.notes || '',
     b.active === 0 ? 0 : 1
   );
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', requirePermission('workers.manage'), (req, res) => {
   const db = getDb();
   const row = db.prepare('SELECT * FROM workers WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Trabajador no encontrado' });
@@ -64,7 +77,7 @@ router.put('/:id', (req, res) => {
   db.prepare(`
     UPDATE workers SET
       user_id = ?, full_name = ?, document = ?, phone = ?, position = ?,
-      share_weight = ?, notes = ?, active = ?,
+      share_weight = ?, hired_at = ?, base_salary_usd = ?, notes = ?, active = ?,
       updated_at = datetime('now','localtime')
     WHERE id = ?
   `).run(
@@ -74,6 +87,8 @@ router.put('/:id', (req, res) => {
     b.phone ?? row.phone,
     b.position ?? row.position,
     weight,
+    b.hired_at !== undefined ? (b.hired_at || '') : (row.hired_at || ''),
+    b.base_salary_usd !== undefined ? (Number(b.base_salary_usd) >= 0 ? Number(b.base_salary_usd) : 0) : (Number(row.base_salary_usd) || 0),
     b.notes ?? row.notes,
     b.active === undefined ? row.active : (b.active ? 1 : 0),
     row.id
@@ -81,7 +96,7 @@ router.put('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/payroll', (req, res) => {
+router.get('/payroll', requirePermission('workers.view'), (req, res) => {
   const now = new Date();
   const year = req.query.year || now.getFullYear();
   const month = req.query.month || (now.getMonth() + 1);
@@ -90,19 +105,23 @@ router.get('/payroll', (req, res) => {
     const period = quincena(year, month, half);
     const data = buildPayroll(getDb(), period);
     const session = currentSession(getDb());
-    res.json({ ...data, cash_open: !!session });
+    res.json({ ...data, cash_open: !!session, ops: opsSnapshot(getDb()) });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
 });
 
-router.post('/:id/attendance', (req, res) => {
+router.post('/:id/attendance', requirePermission('workers.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const worker = db.prepare('SELECT id FROM workers WHERE id = ?').get(req.params.id);
   if (!worker) return res.status(404).json({ error: 'Trabajador no encontrado' });
   const day = req.body?.day;
   if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     return res.status(400).json({ error: 'Fecha inválida' });
+  }
+  if (!isDayOperable(db, day)) {
+    return res.status(400).json({ error: 'Solo se marcan días desde la fecha de inicio hasta el día operativo actual' });
   }
   const worked = req.body.worked ? 1 : 0;
   db.prepare(`
@@ -113,8 +132,9 @@ router.post('/:id/attendance', (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/:id/pay', (req, res) => {
+router.post('/:id/pay', requirePermission('workers.manage'), (req, res) => {
   const db = getDb();
+  if (!requireOpsOpen(db, res)) return;
   const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(req.params.id);
   if (!worker || !worker.active) {
     return res.status(404).json({ error: 'Trabajador no encontrado o inactivo' });
@@ -140,8 +160,15 @@ router.post('/:id/pay', (req, res) => {
 
   const payroll = buildPayroll(db, period);
   const row = payroll.workers.find((w) => w.id === worker.id);
-  if (!row || row.remaining_usd <= 0) {
-    return res.status(400).json({ error: 'Este trabajador no tiene saldo pendiente en la quincena' });
+  const kind = req.body.kind === 'salary' ? 'salary' : 'commission';
+  const remaining = kind === 'salary' ? row?.salary_remaining_usd : row?.remaining_usd;
+  const allocated = kind === 'salary' ? row?.salary_allocated_usd : row?.allocated_usd;
+  if (!row || !(remaining > 0)) {
+    return res.status(400).json({
+      error: kind === 'salary'
+        ? 'Este trabajador no tiene salario pendiente en la quincena'
+        : 'Este trabajador no tiene comisión pendiente en la quincena',
+    });
   }
 
   const rate = todayRate(db);
@@ -150,41 +177,47 @@ router.post('/:id/pay', (req, res) => {
   const payAmount = (req.body.amount !== undefined && req.body.amount !== null && req.body.amount !== '')
     ? Number(req.body.amount)
     : (req.body.payment_method.startsWith('bs')
-      ? round2(row.remaining_usd * rateValue)
-      : row.remaining_usd);
+      ? round2(remaining * rateValue)
+      : remaining);
   if (!(payAmount > 0)) return res.status(400).json({ error: 'El monto a pagar debe ser mayor a cero' });
   const amountUsd = amountToUsd(payAmount, req.body.payment_method, rateType, rateValue);
-  if (amountUsd > row.remaining_usd + 0.009) {
+  if (amountUsd > remaining + 0.009) {
     return res.status(400).json({
-      error: `El pago (${amountUsd} USD) supera lo asignado pendiente (${row.remaining_usd} USD)`,
+      error: `El pago (${amountUsd} USD) supera lo asignado pendiente (${remaining} USD)`,
     });
   }
 
+  const bucket = kind === 'salary' ? 'salary' : 'payroll';
+  const label = kind === 'salary' ? 'Salario' : 'Comisión';
   try {
     const result = db.transaction(() => {
       const tx = db.prepare(`
         INSERT INTO cash_transactions (
           session_id, type, payment_method, amount, amount_usd, rate_type, rate_value,
-          description, created_by, finance_bucket, worker_id
-        ) VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, ?, 'payroll', ?)
+          description, created_by, finance_bucket, worker_id, created_at
+        ) VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         session.id, req.body.payment_method, payAmount, amountUsd,
         rateType, rateValue,
-        `Nómina ${period.label} · ${worker.full_name}`,
-        req.user.id, worker.id
+        `${label} ${period.label} · ${worker.full_name}`,
+        req.user.id, bucket, worker.id, businessDateTime(db)
       );
       db.prepare(`
         INSERT INTO payroll_payments (
           worker_id, period_from, period_to, period_kind, days_worked,
-          allocated_usd, amount_usd, cash_transaction_id, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          allocated_usd, amount_usd, kind, cash_transaction_id, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         worker.id, period.from, period.to, period.kind, row.days_worked,
-        row.allocated_usd, amountUsd, tx.lastInsertRowid, req.user.id
+        allocated, amountUsd, kind, tx.lastInsertRowid, req.user.id
       );
-      return { cash_transaction_id: tx.lastInsertRowid, amount_usd: amountUsd };
+      return { cash_transaction_id: tx.lastInsertRowid, amount_usd: amountUsd, kind };
     })();
-    res.status(201).json({ ok: true, ...result, remaining_usd: round2(row.remaining_usd - result.amount_usd) });
+    res.status(201).json({
+      ok: true,
+      ...result,
+      remaining_usd: round2(remaining - result.amount_usd),
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

@@ -125,6 +125,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
       db.prepare('UPDATE exchange_rates SET created_by = NULL WHERE created_by = ?').run(id);
       db.prepare('UPDATE quotes SET created_by = NULL WHERE created_by = ?').run(id);
       db.prepare('UPDATE work_orders SET technician_id = NULL WHERE technician_id = ?').run(id);
+      db.prepare('UPDATE work_orders SET cashier_id = NULL WHERE cashier_id = ?').run(id);
       db.prepare('UPDATE work_orders SET created_by = NULL WHERE created_by = ?').run(id);
       db.prepare('UPDATE inventory_movements SET created_by = NULL WHERE created_by = ?').run(id);
       db.prepare('UPDATE cash_sessions SET opened_by = NULL WHERE opened_by = ?').run(id);
