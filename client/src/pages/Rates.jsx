@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, rateLabel, localDate } from '../api';
 import { ErrorBox, Field, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
@@ -8,16 +8,9 @@ export default function Rates() {
   const canRates = can('rates.manage');
   const canHistory = user?.role === 'Administrador' || user?.role === 'Gerente';
   const { data, error, reload } = useAsync(() => api('/rates'));
-  const opsQ = useAsync(() => api('/ops').catch(() => null));
-  const today = opsQ.data?.current_date || localDate();
+  const today = localDate();
   const [form, setForm] = useState({ rate_date: localDate(), bcv: '', euro: '', usdt: '' });
   const [msg, setMsg] = useState('');
-
-  useEffect(() => {
-    if (opsQ.data?.current_date) {
-      setForm((f) => ({ ...f, rate_date: opsQ.data.current_date }));
-    }
-  }, [opsQ.data?.current_date]);
 
   async function save(e) {
     e.preventDefault();
@@ -41,7 +34,7 @@ export default function Rates() {
         <div className="mb-6 rounded-2xl border-2 border-rose-400 bg-rose-100 p-5">
           <h2 className="font-semibold text-rose-950">Tasa del día pendiente</h2>
           <p className="mt-1 text-sm text-rose-900">
-            Sin tasas del día operativo ({today}) no se puede abrir caja ni cotizar. La orden se crea al cobrar la cotización.
+            Sin tasas de hoy ({today}) no se puede abrir caja ni cotizar. La orden se crea al cobrar la cotización.
           </p>
         </div>
       )}

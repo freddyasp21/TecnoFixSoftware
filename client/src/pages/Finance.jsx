@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, downloadExcel, usd, FINANCE_BUCKETS, PAYMENT_METHODS } from '../api';
+import { api, downloadExcel, usd, FINANCE_BUCKETS, PAYMENT_METHODS, localDate } from '../api';
 import { ErrorBox, Field, PageHeader, useAsync } from '../components/ui';
 import { useAuth } from '../auth';
 
@@ -21,7 +21,7 @@ function monthStart() {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localDate();
 }
 
 export default function Finance() {
@@ -55,7 +55,7 @@ export default function Finance() {
       {
         id: 'iva',
         label: 'IVA',
-        hint: `${ivaRate}% del total que ingresa por caja. Reserva fiscal, no se reparte en los otros sobres.`,
+        hint: `${ivaRate}% del total que ingresa en el período. Reserva fiscal, no se reparte en los otros sobres.`,
         pct: ivaRate,
         allocated: Number(data?.iva_usd) || 0,
         spent: null,
@@ -97,7 +97,7 @@ export default function Finance() {
     <div>
       <PageHeader
         title="Gestión financiera"
-        subtitle="Los ingresos de caja alimentan comisiones, insumos, ahorro y operación. El salario es un monto fijo por trabajador."
+        subtitle="Los cobros de órdenes (incluidas las importadas) alimentan comisiones, insumos, ahorro y operación. El salario es un monto fijo por trabajador."
         actions={
           <>
             <button className="btn-ghost" onClick={() => downloadExcel('finanzas')}>Exportar Excel</button>
@@ -106,8 +106,11 @@ export default function Finance() {
           </>
         }
       />
-      {data?.ops?.start_date && (
-        <p className="mb-4 text-sm text-slate-600">Cálculos desde {data.ops.start_date} · día operativo {data.ops.current_date}</p>
+      {data?.from && (
+        <p className="mb-4 text-sm text-slate-600">
+          Período {data.from} → {data.to}
+          {data?.ops?.current_date ? ` · día operativo ${data.ops.current_date}` : ''}
+        </p>
       )}
       <ErrorBox error={error || (msg && !msg.startsWith('Reglas') ? msg : '')} />
       {msg.startsWith('Reglas') && (
@@ -121,7 +124,7 @@ export default function Finance() {
 
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         <div className="card p-4">
-          <div className="text-xs font-semibold uppercase text-slate-500">Ingresos (caja)</div>
+          <div className="text-xs font-semibold uppercase text-slate-500">Ingresos</div>
           <div className="mt-1 text-2xl font-bold text-emerald-700">{usd(data?.income_usd)}</div>
         </div>
         <div className="card p-4">
@@ -135,7 +138,7 @@ export default function Finance() {
         <div className="card border-violet-100 bg-violet-50 p-4">
           <div className="text-xs font-semibold uppercase text-violet-800">IVA {data?.iva_rate ?? 16}%</div>
           <div className="mt-1 text-2xl font-bold text-violet-950">{usd(data?.iva_usd)}</div>
-          <div className="mt-1 text-xs text-violet-800/80">Del total que ingresa por caja</div>
+          <div className="mt-1 text-xs text-violet-800/80">Del total que ingresa en el período</div>
         </div>
       </div>
 
@@ -248,8 +251,8 @@ export default function Finance() {
 
       <div className="card table-wrap">
         <div className="border-b border-slate-100 px-4 py-3">
-          <h2 className="font-semibold text-ink-900">Movimientos de caja del período</h2>
-          <p className="text-xs text-slate-500">Los ingresos alimentan los sobres. Clasifique cada egreso para descontarlo del sobre correcto.</p>
+          <h2 className="font-semibold text-ink-900">Movimientos del período</h2>
+          <p className="text-xs text-slate-500">Incluye cobros de caja y de órdenes importadas. Clasifique cada egreso para descontarlo del sobre correcto.</p>
         </div>
         <table className="data">
           <thead>
@@ -291,7 +294,7 @@ export default function Finance() {
               </tr>
             ))}
             {(data?.movements || []).length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-500">No hay movimientos de caja en este rango.</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-slate-500">No hay movimientos en este rango.</td></tr>
             )}
           </tbody>
         </table>

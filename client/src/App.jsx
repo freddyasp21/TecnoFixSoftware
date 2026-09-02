@@ -27,7 +27,7 @@ function Guard({ children }) {
   const { user, ready } = useAuth();
   if (!ready) {
     return (
-      <div className="grid min-h-screen place-items-center bg-ink-900 text-sky-100">
+      <div className="grid min-h-screen place-items-center bg-canvas text-brand-500">
         Cargando Tecno Fix…
       </div>
     );

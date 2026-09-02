@@ -7,29 +7,35 @@
 }
 
 body {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: #F3EEFF;
 }
 
 input, select, textarea {
-  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition;
-  @apply focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
+  @apply w-full rounded-2xl border border-violet-100 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition;
+  @apply focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15;
 }
 
 label {
-  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
 }
-.btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-500 shadow-sm; }
-.btn-dark { @apply btn bg-ink-900 text-white hover:bg-ink-800; }
-.btn-ghost { @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50; }
-.btn-danger { @apply btn bg-rose-600 text-white hover:bg-rose-500; }
-.btn-amber { @apply btn bg-ember-500 text-ink-950 hover:bg-ember-400; }
+.btn-primary {
+  @apply btn text-white;
+  background-color: #5255F9;
+  box-shadow: 0 8px 30px -12px rgba(76, 29, 149, 0.18);
+}
+.btn-primary:hover { background-color: #6B6EFB; }
+.btn-dark { @apply btn bg-brand-500 text-white hover:bg-brand-400; }
+.btn-ghost { @apply btn bg-white text-slate-700 border border-violet-100 hover:bg-violet-50; }
+.btn-danger { @apply btn bg-rose-500 text-white hover:bg-rose-400; }
+.btn-amber { @apply btn bg-amber-400 text-ink-950 hover:bg-amber-300; }
 
 .card {
-  @apply rounded-2xl border border-slate-200/80 bg-white shadow-card;
+  @apply rounded-[22px] border border-white bg-white shadow-card;
 }
 
 .table-wrap { @apply overflow-x-auto; }
@@ -37,12 +43,16 @@ table.data {
   @apply w-full text-left text-sm;
 }
 table.data th {
-  @apply bg-slate-50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200;
+  @apply bg-violet-50/70 px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-violet-100;
 }
 table.data td {
-  @apply px-3 py-2.5 border-b border-slate-100 text-slate-700;
+  @apply px-3 py-3 border-b border-violet-50 text-slate-700;
 }
-table.data tr:hover td { @apply bg-sky-50/40; }
+table.data tr:hover td { @apply bg-violet-50/50; }
+
+.hero-gradient {
+  background: linear-gradient(135deg, #5A2EE5 0%, #6D4EE8 45%, #5255F9 100%);
+}
 
 @media print {
   .no-print { display: none !important; }

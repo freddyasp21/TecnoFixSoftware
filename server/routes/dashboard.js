@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
-const { businessDate } = require('../utils/helpers');
+const { businessDate, localDate, round2 } = require('../utils/helpers');
 
 const router = express.Router();
 router.use(authRequired, requirePermission('dashboard.view'));
@@ -34,6 +34,86 @@ router.get('/', (_req, res) => {
   `).all();
 
   res.json({ kpis, orders, pendingCollect });
+});
+
+function monthParts(ym) {
+  const [y, m] = String(ym).split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const prev = new Date(y, m - 2, 1);
+  return {
+    from: `${ym}-01`,
+    to: `${ym}-${String(last).padStart(2, '0')}`,
+    days: last,
+    prev: `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`,
+  };
+}
+
+function servicesInRange(db, from, to) {
+  const sql = (typeFilter) => `
+    SELECT i.description AS name,
+           COALESCE(SUM(i.qty), 0) AS qty,
+           COUNT(DISTINCT i.work_order_id) AS orders,
+           COALESCE(SUM(i.line_total), 0) AS total_usd
+    FROM work_order_items i
+    JOIN work_orders w ON w.id = i.work_order_id
+    WHERE w.status != 'cancelado'
+      ${typeFilter}
+      AND date(w.received_at) BETWEEN date(?) AND date(?)
+    GROUP BY i.description
+    ORDER BY qty DESC, total_usd DESC
+  `;
+  const services = db.prepare(sql("AND i.type = 'service'")).all(from, to);
+  if (services.length) return services;
+  return db.prepare(sql('')).all(from, to);
+}
+
+router.get('/charts', (req, res) => {
+  const db = getDb();
+  const monthRows = db.prepare(`
+    SELECT m FROM (
+      SELECT strftime('%Y-%m', received_at) AS m FROM work_orders
+      UNION
+      SELECT strftime('%Y-%m', created_at) AS m FROM cash_transactions WHERE type = 'income'
+    ) WHERE m IS NOT NULL
+    ORDER BY m DESC
+  `).all().map((r) => r.m);
+  const requested = String(req.query.month || '');
+  const month = /^\d{4}-\d{2}$/.test(requested) ? requested : (monthRows[0] || localDate().slice(0, 7));
+  const { from, to, days, prev } = monthParts(month);
+  const prevRange = monthParts(prev);
+  const months = [...new Set([month, ...monthRows])].sort().reverse();
+
+  const currentServices = servicesInRange(db, from, to);
+  const prevMap = Object.fromEntries(servicesInRange(db, prevRange.from, prevRange.to).map((r) => [r.name, r]));
+  const services = currentServices.slice(0, 7).map((r) => ({
+    name: r.name,
+    qty: Number(r.qty) || 0,
+    orders: Number(r.orders) || 0,
+    total_usd: round2(r.total_usd),
+    prev_qty: Number(prevMap[r.name]?.qty) || 0,
+  }));
+
+  const incomeRows = db.prepare(`
+    SELECT date(created_at) AS day, COALESCE(SUM(amount_usd), 0) AS income_usd
+    FROM cash_transactions
+    WHERE type = 'income' AND date(created_at) BETWEEN date(?) AND date(?)
+    GROUP BY date(created_at)
+  `).all(from, to);
+  const byDay = Object.fromEntries(incomeRows.map((r) => [r.day, Number(r.income_usd) || 0]));
+  const income = [];
+  for (let d = 1; d <= days; d += 1) {
+    const day = `${month}-${String(d).padStart(2, '0')}`;
+    income.push({ day, label: String(d), income_usd: round2(byDay[day] || 0) });
+  }
+
+  res.json({
+    month,
+    prev_month: prev,
+    months,
+    services,
+    income,
+    income_total: round2(income.reduce((s, r) => s + r.income_usd, 0)),
+  });
 });
 
 module.exports = router;

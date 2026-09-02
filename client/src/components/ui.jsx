@@ -34,7 +34,7 @@ export function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink-900">{title}</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       <div className="flex flex-wrap gap-2">{actions}</div>
@@ -82,7 +82,7 @@ export function Switch({ checked, onChange, label }) {
       onClick={() => onChange(!checked)}
       className="flex items-center gap-3"
     >
-      <span className={`relative h-6 w-11 rounded-full transition ${checked ? 'bg-brand-600' : 'bg-slate-300'}`}>
+      <span className={`relative h-6 w-11 rounded-full transition ${checked ? 'bg-brand-500' : 'bg-slate-300'}`}>
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${checked ? 'left-5' : 'left-0.5'}`} />
       </span>
       {label && <span className="text-sm font-medium text-slate-700">{label}</span>}

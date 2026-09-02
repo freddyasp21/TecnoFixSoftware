@@ -128,6 +128,27 @@ export function statusMeta(id) {
   return ORDER_STATUS.find((s) => s.id === id) || { id, label: id, color: 'bg-slate-100 text-slate-700' };
 }
 
+export function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
+const ART = [
+  'from-indigo-600 via-fuchsia-500 to-pink-400',
+  'from-violet-700 via-purple-500 to-cyan-400',
+  'from-blue-700 via-indigo-500 to-fuchsia-400',
+  'from-fuchsia-600 via-rose-500 to-amber-300',
+  'from-slate-800 via-violet-600 to-sky-400',
+];
+
+export function orderArt(seed) {
+  const s = String(seed || '');
+  let n = 0;
+  for (let i = 0; i < s.length; i += 1) n += s.charCodeAt(i);
+  return ART[n % ART.length];
+}
+
 export function rateLabel(type) {
   return { bcv: 'BCV', euro: 'Dólar €', usdt: 'USDT' }[type] || type;
 }

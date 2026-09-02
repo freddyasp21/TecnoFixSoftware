@@ -22,11 +22,14 @@ export default function OrderForm() {
     rate_type: 'bcv', rate_value: 1, iva_enabled: true, iva_rate: 16, items: [],
   });
 
+  const [todayRates, setTodayRates] = useState(null);
+
   useEffect(() => {
     if (!id) return;
     api('/clients').then(setClients).catch(() => {});
     api('/orders/lookups/technicians').then(setTechs).catch(() => {});
     api('/orders/lookups/cashiers').then(setCashiers).catch(() => {});
+    api('/rates/today').then((r) => setTodayRates(r || null)).catch(() => setTodayRates(null));
     api(`/orders/${id}`).then((o) => {
       setNumber(o.number);
       setForm({
@@ -135,12 +138,29 @@ export default function OrderForm() {
           <LineItems items={form.items} setItems={(items) => setForm({ ...form, items })} />
         </div>
         <div className="card space-y-4 p-5">
-          <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">Tasa del cobro</div>
-            <div className="mt-1 text-2xl font-bold text-sky-950">{bs(form.rate_value)} / USD</div>
-            <p className="mt-1 text-xs text-sky-800">
-              {rateLabel(form.rate_type)} del {form.received_at || 'día de cobro'}. Queda fijada en la orden.
-            </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-800">Tasa del cobro</div>
+              <div className="mt-1 text-lg font-bold leading-tight text-sky-950">{bs(form.rate_value)} / USD</div>
+              <p className="mt-1 text-[11px] leading-snug text-sky-800">
+                {rateLabel(form.rate_type)} del {form.received_at || 'día de cobro'}. Fijada en la orden.
+              </p>
+            </div>
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800">Tasa del día actual</div>
+              {todayRates ? (
+                <>
+                  <div className="mt-1 text-lg font-bold leading-tight text-indigo-950">
+                    {bs(todayRates[form.rate_type] || todayRates.bcv)} / USD
+                  </div>
+                  <p className="mt-1 text-[11px] leading-snug text-indigo-800">
+                    {rateLabel(form.rate_type)} de hoy{todayRates.rate_date ? ` (${todayRates.rate_date})` : ''}. No modifica la orden.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-[11px] leading-snug text-indigo-800">Aún no hay tasa registrada para el día de hoy.</p>
+              )}
+            </div>
           </div>
           <Field label="Tipo de tasa">
             <select value={form.rate_type} onChange={(e) => setForm({ ...form, rate_type: e.target.value })}>
@@ -163,7 +183,13 @@ export default function OrderForm() {
               <div className="flex justify-between"><span>IVA {form.iva_rate}% incluido</span><b>{usd(totals.iva)}</b></div>
             )}
             <div className="mt-2 flex justify-between text-base"><span>Total USD</span><b>{usd(totals.total)}</b></div>
-            <div className="flex justify-between text-slate-500"><span>Total Bs</span><span>{bs(totals.total * Number(form.rate_value || 0))}</span></div>
+            <div className="flex justify-between text-slate-500"><span>Total Bs (cobro)</span><span>{bs(totals.total * Number(form.rate_value || 0))}</span></div>
+            {todayRates && (
+              <div className="flex justify-between text-slate-400">
+                <span>Total Bs (hoy)</span>
+                <span>{bs(totals.total * Number(todayRates[form.rate_type] || todayRates.bcv || 0))}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

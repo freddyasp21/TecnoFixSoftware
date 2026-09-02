@@ -6,11 +6,20 @@ const express = require('express');
 const { getDb } = require('../db/database');
 const { authRequired, requirePermission } = require('../middleware/auth');
 const { getSetting, setSetting, round2 } = require('../utils/helpers');
+const { backfillImportedOrderIncome, cashInPeriodSql, importCashSessionSetting } = require('../services/importedCash');
 const { salaryEnvelope } = require('../utils/payroll');
-const { clampPeriodFrom, opsSnapshot } = require('../utils/opsDay');
+const { opsSnapshot } = require('../utils/opsDay');
 
 const router = express.Router();
 router.use(authRequired);
+
+let importedIncomeSynced = false;
+
+function ensureImportedIncome(db) {
+  if (importedIncomeSynced) return;
+  backfillImportedOrderIncome(db);
+  importedIncomeSynced = true;
+}
 
 const BUCKETS = [
   { id: 'payroll', key: 'finance_pct_payroll', label: 'Comisiones', hint: 'Se reparte entre trabajadores según los días que cada uno laboró en el período' },
@@ -29,26 +38,30 @@ function rules(db) {
 
 router.get('/', requirePermission('finance.view'), (req, res) => {
   const db = getDb();
-  const requestedFrom = req.query.from || new Date().toISOString().slice(0, 8) + '01';
-  const to = req.query.to || new Date().toISOString().slice(0, 10);
-  const from = clampPeriodFrom(db, requestedFrom);
+  ensureImportedIncome(db);
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const requestedFrom = DATE_RE.test(req.query.from) ? req.query.from : new Date().toISOString().slice(0, 8) + '01';
+  const to = DATE_RE.test(req.query.to) ? req.query.to : new Date().toISOString().slice(0, 10);
+  const from = requestedFrom;
   const pct = rules(db);
+  const periodSql = cashInPeriodSql('t');
+  const importSid = importCashSessionSetting(db);
 
   const totals = db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN type = 'income' THEN amount_usd ELSE 0 END), 0) AS income_usd,
-      COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_usd ELSE 0 END), 0) AS expense_usd
-    FROM cash_transactions
-    WHERE date(created_at) BETWEEN date(?) AND date(?)
-  `).get(from, to);
+      COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount_usd ELSE 0 END), 0) AS income_usd,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_usd ELSE 0 END), 0) AS expense_usd
+    FROM cash_transactions t
+    WHERE ${periodSql}
+  `).get(from, to, importSid);
 
   const spentRows = db.prepare(`
-    SELECT COALESCE(finance_bucket, 'unclassified') AS bucket,
-           COALESCE(SUM(amount_usd), 0) AS amount_usd
-    FROM cash_transactions
-    WHERE type = 'expense' AND date(created_at) BETWEEN date(?) AND date(?)
-    GROUP BY COALESCE(finance_bucket, 'unclassified')
-  `).all(from, to);
+    SELECT COALESCE(t.finance_bucket, 'unclassified') AS bucket,
+           COALESCE(SUM(t.amount_usd), 0) AS amount_usd
+    FROM cash_transactions t
+    WHERE t.type = 'expense' AND ${periodSql}
+    GROUP BY COALESCE(t.finance_bucket, 'unclassified')
+  `).all(from, to, importSid);
   const spent = Object.fromEntries(spentRows.map((r) => [r.bucket, r.amount_usd]));
 
   const income = round2(totals.income_usd);
@@ -88,9 +101,9 @@ router.get('/', requirePermission('finance.view'), (req, res) => {
     LEFT JOIN clients c ON c.id = t.client_id
     LEFT JOIN work_orders wo ON wo.id = t.work_order_id
     LEFT JOIN workers w ON w.id = t.worker_id
-    WHERE date(t.created_at) BETWEEN date(?) AND date(?)
+    WHERE ${periodSql}
     ORDER BY t.created_at DESC
-  `).all(from, to);
+  `).all(from, to, importSid);
 
   const payroll = db.prepare(`
     SELECT p.id, p.period_from, p.period_to, p.period_kind, p.days_worked,

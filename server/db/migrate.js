@@ -3,6 +3,7 @@
  */
 const { setSetting } = require('../utils/helpers');
 const { ROLE_DEFS, ROLE_PERMS } = require('./seed');
+const { backfillImportedOrderIncome } = require('../services/importedCash');
 
 function columnExists(db, table, column) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -206,6 +207,8 @@ function migrate(db) {
       notes       TEXT
     );
   `);
+
+  backfillImportedOrderIncome(db);
 }
 
 module.exports = { migrate };

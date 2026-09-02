@@ -58,9 +58,10 @@ function rateOnDate(db, date) {
   return db.prepare('SELECT * FROM exchange_rates WHERE rate_date = ?').get(day) || null;
 }
 
-/** Tasa del día operativo. Si no hay fila de ese día, null (no se reutiliza la de ayer). */
+/** Tasa del día calendario; si no hay, la del día operativo. */
 function todayRate(db) {
-  return rateOnDate(db, businessDate(db));
+  const clock = localDate();
+  return rateOnDate(db, clock) || rateOnDate(db, businessDate(db));
 }
 
 function todayRateOr409(db, res) {

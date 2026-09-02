@@ -5,6 +5,7 @@
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const { nextNumber, ORDER_STATUS, round2, getSetting, setSetting, todayRate, rateOnDate, localDate } = require('../utils/helpers');
+const { syncImportedOrderIncome } = require('./importedCash');
 
 const MODULES = {
   clientes: {
@@ -661,6 +662,7 @@ function commitDatasets(db, datasets, userId) {
           const existingNum = String(r.number || '').trim();
           const existing = existingNum ? findNum.get(existingNum) : null;
           let orderId;
+          let orderNumber = existingNum;
           if (existing) {
             upd.run(
               clientId, techId, cashierId, status,
@@ -673,10 +675,10 @@ function commitDatasets(db, datasets, userId) {
             orderId = existing.id;
             updated += 1;
           } else {
-            const number = existingNum || nextNumber(db, 'order_seq', 'OT');
-            if (existingNum) bumpSeqIfNeeded(db, 'order_seq', number);
+            orderNumber = existingNum || nextNumber(db, 'order_seq', 'OT');
+            if (existingNum) bumpSeqIfNeeded(db, 'order_seq', orderNumber);
             const info = ins.run(
-              number, clientId, techId, cashierId, status,
+              orderNumber, clientId, techId, cashierId, status,
               r.device_brand || '', r.device_model || '', r.serial_number || '', r.device_password || '',
               r.fault_description || '', r.physical_notes || '',
               rateType, rateValue, totals.iva_enabled, totals.iva_rate,
@@ -689,6 +691,18 @@ function commitDatasets(db, datasets, userId) {
           if (String(r.service_name || '').trim()) {
             saveImportedServiceItem(db, orderId, r, catalog, gross);
           }
+          syncImportedOrderIncome(db, {
+            id: orderId,
+            number: orderNumber,
+            total: totals.total,
+            received_at: receivedAt,
+            client_id: clientId,
+            rate_type: rateType,
+            rate_value: rateValue,
+            cashier_id: cashierId,
+            created_by: cashierId,
+            status,
+          }, userId);
         }
       }
       results.push({ module: ds.module, label: MODULES[ds.module].label, inserted, updated, total: rows.length });
